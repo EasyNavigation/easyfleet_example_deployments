@@ -50,7 +50,7 @@ foreach(capability navigation manipulation perception)
   )
 endforeach()
 
-foreach(scenario alone collaboration)
+foreach(scenario alone collaboration easynav)
   add_executable(${scenario}_mission_node src/main_${scenario}.cpp)
   target_link_libraries(${scenario}_mission_node
     rclcpp::rclcpp
@@ -77,6 +77,7 @@ install(
     perception_fake_capability_node
     alone_mission_node
     collaboration_mission_node
+    easynav_mission_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(
