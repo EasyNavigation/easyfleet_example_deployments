@@ -1,0 +1,137 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# robot_2 in this scenario: real EasyNav navigation (easynav_system
+# system_main + easyfleet_easynav_deployment's own
+# easynav_navigation_capability_node, reused directly -- not duplicated in
+# this package) plus a fake manipulation capability (this package's own
+# robot_node), all namespaced under /robot_2 so they never collide with
+# robot_1's identically-shaped setup. Can be run standalone, against
+# easynav_playground_kobuki's playgorund_multirobot_kobuki.launch.py
+# already running (robot_2's Kobuki is spawned there, namespaced the same
+# way -- see multirobot_config.yaml).
+#
+# See robot_1_launch.yaml for why "tf_prefix" (and the namespace itself) are
+# kept hardcoded here even under the Zenoh-island setup below -- unrelated to
+# Zenoh, driven by how easynav_playground_kobuki's Kobuki spawn couples topic
+# namespace and TF frame prefix together (see zenoh.md). Also see that file
+# for why rviz2 below loads its own pre-resolved rviz/robot_2.rviz config
+# instead of a remapped copy of the shared easynav_costmap.rviz.
+#
+# Zenoh: see robot_1_launch.yaml for the full rationale -- this group starts
+# robot_2's own Zenoh router first (port 7449, "7447 + robot index"), then
+# every node as a client of that local router. Boundary contract (what can
+# cross into the central island) is in config/robot_2/zenoh_router.json5:
+# capabilities, global_map/routes, and this robot's own capability actions
+# (/robot_2/navigation, /robot_2/manipulation).
+launch:
+  - group:
+      - executable:
+          cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
+          output: "screen"
+          env:
+            - name: "ZENOH_ROUTER_CONFIG_URI"
+              value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_router.json5"
+
+      - timer:
+          period: 2.0
+          children:
+            - group:
+                - push_ros_namespace:
+                    namespace: "robot_2"
+
+                - node:
+                    pkg: "easynav_system"
+                    exec: "system_main"
+                    output: "screen"
+                    env:
+                      - name: "RMW_IMPLEMENTATION"
+                        value: "rmw_zenoh_cpp"
+                      - name: "ZENOH_SESSION_CONFIG_URI"
+                        value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
+                    param:
+                      - from: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/easynav_system.costmap_rpp.params.yaml"
+                      - name: "tf_prefix"
+                        value: "robot_2"
+                    remap:
+                      # Fleet-wide map/routes from easyfleet_navigation_manager's
+                      # navigation_manager_node. Direction is "from what the code
+                      # itself names its topic, to the name we actually want" --
+                      # see
+                      # easyfleet_easynav_deployment/launch/easynav_robot_gazebo_launch.yaml's
+                      # own copy of this remap for the full explanation. This copy
+                      # previously had `from`/`to` swapped, which is a silent
+                      # no-op in ROS 2 (a remap only fires when some code actually
+                      # requests the exact `from` name; CostmapMapsManager's/
+                      # RoutesMapsManager's incoming_map/incoming_routes
+                      # subscriptions build their own fully-qualified name
+                      # directly via get_fully_qualified_name() and never request
+                      # "/global_map"/"/global_routes" themselves, so that
+                      # direction never had any effect) -- confirmed empirically
+                      # with a minimal rclpy repro outside this codebase before
+                      # fixing.
+                      - from: "maps_manager_node/costmap/incoming_map"
+                        to: "/global_map"
+                      - from: "maps_manager_node/routes/incoming_routes"
+                        to: "/global_routes"
+
+                - node:
+                    pkg: "easyfleet_easynav_deployment"
+                    exec: "easynav_navigation_capability_node"
+                    name: "navigation"
+                    output: "screen"
+                    env:
+                      - name: "RMW_IMPLEMENTATION"
+                        value: "rmw_zenoh_cpp"
+                      - name: "ZENOH_SESSION_CONFIG_URI"
+                        value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
+                    param:
+                      - from: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/navigation_params.yaml"
+                      - name: "behavior_tree_xml"
+                        value: "$(find-pkg-share easyfleet_easynav_deployment)/behavior_trees/navigate.xml"
+                      - name: "bt_plugins"
+                        value:
+                          - "$(find-pkg-prefix easyfleet_easynav_navigation)/lib/libeasynav_navigate_bt_node.so"
+                          - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libstart_off_bt_node.so"
+                          - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libfinish_bt_node.so"
+                      - name: "capabilities_file"
+                        value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/navigation.json"
+
+                - node:
+                    pkg: "easyfleet_easynav_collaboration_zenoh_deployment"
+                    exec: "robot_node"
+                    output: "screen"
+                    env:
+                      - name: "RMW_IMPLEMENTATION"
+                        value: "rmw_zenoh_cpp"
+                      - name: "ZENOH_SESSION_CONFIG_URI"
+                        value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
+                    param:
+                      - from: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/robot_params.yaml"
+                      - from: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/manipulation_params.yaml"
+
+                - node:
+                    pkg: "rviz2"
+                    exec: "rviz2"
+                    output: "screen"
+                    env:
+                      - name: "RMW_IMPLEMENTATION"
+                        value: "rmw_zenoh_cpp"
+                      - name: "ZENOH_SESSION_CONFIG_URI"
+                        value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
+                    args: "-d $(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/rviz/robot_2.rviz"
+                    param:
+                      - name: "use_sim_time"
+                        value: true

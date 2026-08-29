@@ -1,0 +1,155 @@
+// Copyright 2026 Intelligent Robotics Lab
+//
+// This file is part of the project EasyFleet
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// robot_2's own Zenoh island router -- mirrors robot_1/zenoh_router.json5,
+// see that file for the full design rationale (including why local clients
+// are recognized by `link_protocols: ["unixsock-stream"]` rather than a
+// hardcoded id list). Differences: robot_2 exposes the manipulation
+// capability instead of perception (see launch/robot_2_launch.yaml), and
+// this simulation profile's TCP port is "7447 + 2" = 7449.
+{
+  id: "cb0522e620284198a9f13fc1f1a66710",
+  mode: "router",
+  connect: { endpoints: ["tcp/127.0.0.1:7447"] },
+  listen: { endpoints: ["unixsock-stream//tmp/easyfleet_robot_2_zenoh.sock", "tcp/127.0.0.1:7449"] },
+  scouting: { multicast: { enabled: false } },
+  access_control: {
+    enabled: true,
+    default_permission: "deny",
+    rules: [
+      {
+        id: "allow_local",
+        messages: [
+          "put", "delete", "declare_subscriber",
+          "query", "reply", "declare_queryable",
+          "liveliness_token", "liveliness_query", "declare_liveliness_subscriber",
+        ],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        // "**/@adv/**" and "@ros2_lv/**" alongside the blanket "**": see
+        // robot_1/zenoh_router.json5's allow_local comment -- "**" does not
+        // implicitly match a segment starting with "@" (Zenoh's
+        // Advanced-Publisher cache-recovery keys, used for TRANSIENT_LOCAL
+        // late-joiner delivery, and the "@ros2_lv/..." liveliness
+        // namespace) -- without "@ros2_lv/**" here, even a local client's
+        // own liveliness token gets denied before it could ever be
+        // forwarded anywhere.
+        key_exprs: ["**", "**/@adv/**", "@ros2_lv/**"],
+      },
+      {
+        // /capabilities, /global_map and /global_routes are all published
+        // TRANSIENT_LOCAL -- see robot_1/zenoh_router.json5's identical
+        // comment for the full explanation of why each "*/<name>/**" entry
+        // below needs a matching "*/<name>/**/@adv/**" entry (a "**"
+        // wildcard does not implicitly match a path segment starting with
+        // "@", which is how Zenoh's late-joiner cache-recovery query is
+        // shaped). See zenoh.md (2026-08-29).
+        id: "allow_boundary_data",
+        messages: [
+          "put", "delete", "declare_subscriber",
+          "query", "reply", "declare_queryable",
+          "liveliness_token",
+        ],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: [
+          "*/capabilities/**",
+          "*/capabilities/**/@adv/**",
+          "*/capabilities_status/**",
+          "*/global_map/**",
+          "*/global_map/**/@adv/**",
+          "*/global_routes/**",
+          "*/global_routes/**/@adv/**",
+          "*/clock/**",
+          "*/mission_status_markers/**",
+          "*/mission_status_markers/**/@adv/**",
+          // rclcpp_action publishes "_action/status" TRANSIENT_LOCAL, so
+          // each action name needs its own "@adv" entry too -- see
+          // robot_1/zenoh_router.json5's identical comment (this is what
+          // made mission-driven goals across the boundary time out into
+          // UNREACHABLE while the same navigation worked fine from RViz2,
+          // purely local).
+          "*/robot_2/navigation/**",
+          "*/robot_2/navigation/**/@adv/**",
+          "*/robot_2/manipulation/**",
+          "*/robot_2/manipulation/**/@adv/**",
+          // robot -> central, TRANSIENT_LOCAL (robot_state_publisher):
+          // needed for the fleet-wide RViz2 (navigation_manager.rviz) to
+          // render this robot's RobotModel display.
+          "*/robot_2/robot_description/**",
+          "*/robot_2/robot_description/**/@adv/**",
+          // navigation_manager_node's inter-robot collision arbitration --
+          // see robot_1/zenoh_router.json5's identical entry for the full
+          // explanation (RobotNavigationWatcher watches this robot's path
+          // and sends/receives PAUSE/RESUME over easynav_control,
+          // bidirectional, neither TRANSIENT_LOCAL).
+          "*/robot_2/planner_node/**",
+          "*/robot_2/easynav_control/**",
+        ],
+      },
+      {
+        // Required for action_server_is_ready() to ever return true across
+        // this boundary -- see robot_1/zenoh_router.json5's identical rule
+        // for the full investigation (a real, unmodified ROS 2 action
+        // demo reproduced and confirmed the fix end-to-end). Without this,
+        // every capability action call from mission_control reports
+        // UNREACHABLE with no error anywhere, even a deterministic mock
+        // like this robot's own manipulation capability.
+        id: "allow_boundary_liveliness",
+        messages: ["liveliness_token", "liveliness_query", "declare_liveliness_subscriber"],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: ["@ros2_lv/**"],
+      },
+      {
+        // /tf, /tf_static: interest/query propagation bidirectional (needed
+        // for routing), but see allow_tf_boundary_data_out below for why
+        // the actual data is egress-only -- full rationale in
+        // robot_1/zenoh_router.json5's identical rule (confirmed
+        // empirically that this prevents a robot from ever receiving
+        // another robot's TF back through the central island, while still
+        // letting the central island see everyone's merged).
+        id: "allow_tf_boundary_meta",
+        messages: ["declare_subscriber", "query", "declare_queryable"],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+      },
+      {
+        id: "allow_tf_boundary_data_out",
+        messages: ["put", "delete", "reply"],
+        flows: ["egress"],
+        permission: "allow",
+        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+      },
+    ],
+    subjects: [
+      { id: "local_clients", link_protocols: ["unixsock-stream"] },
+      { id: "central_link", link_protocols: ["tcp"] },
+    ],
+    policies: [
+      { rules: ["allow_local"], subjects: ["local_clients"] },
+      {
+        rules: [
+          "allow_boundary_data",
+          "allow_boundary_liveliness",
+          "allow_tf_boundary_meta",
+          "allow_tf_boundary_data_out",
+        ],
+        subjects: ["central_link"],
+      },
+    ],
+  },
+}

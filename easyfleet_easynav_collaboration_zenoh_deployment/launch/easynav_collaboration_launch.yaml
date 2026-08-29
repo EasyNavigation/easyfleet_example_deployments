@@ -1,0 +1,114 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This deployment's top-level launch file: two real-EasyNav-navigating
+# robots plus mission control.
+#   - robot_1: navigation (real EasyNav), perception (mock)
+#   - robot_2: navigation (real EasyNav), manipulation (mock)
+# Each robot is namespaced independently (see the per-robot launch files),
+# so their capabilities never collide and can also be brought up on their
+# own (e.g. `ros2 launch easyfleet_easynav_collaboration_zenoh_deployment robot_1_launch.yaml`).
+#
+# Does NOT launch Gazebo -- start
+# `ros2 launch easynav_playground_kobuki playgorund_multirobot_kobuki.launch.py`
+# separately first, so both robots are already spawned (namespaced
+# "robot_1"/"robot_2", see multirobot_config.yaml) and publishing
+# scan_raw/odom/TF before system_main tries to localize against them.
+#
+# easynav_collaboration_mission_node is delayed a few seconds so both
+# robots have finished activating (and published their /capabilities
+# announcements) before mission control's discovery window (see
+# easyfleet_mission_manager::discover_capabilities()) opens -- launching
+# everything at literally the same instant risks discovering nothing.
+#
+# Zenoh: this is the launcher for the "central island" too (see zenoh.md) --
+# it starts the central Zenoh router first, then everything below as clients
+# of it (RMW_IMPLEMENTATION + ZENOH_SESSION_CONFIG_URI env). robot_1_launch.yaml/
+# robot_2_launch.yaml each start and connect to their OWN router in turn (see
+# those files), so by the time this file's nodes are up, all three routers
+# are meshed: central <-> robot_1, central <-> robot_2 -- robot_1 and robot_2
+# never connect directly to each other. No ACL needed on the central router
+# itself: each robot router's own ACL (config/robot_N/zenoh_router.json5)
+# already enforces, bidirectionally, that only its documented boundary
+# contract crosses -- see zenoh.md "Punto 4" for why that's sufficient even
+# without a central-side ACL.
+launch:
+  - executable:
+      cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
+      output: "screen"
+      env:
+        - name: "ZENOH_ROUTER_CONFIG_URI"
+          value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_router_central.json5"
+
+  - timer:
+      period: 2.0
+      children:
+        - include:
+            file: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/launch/robot_1_launch.yaml"
+        - include:
+            file: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/launch/robot_2_launch.yaml"
+
+        # Fleet-wide navigation manager: publishes the same map/routes both
+        # robots above would otherwise load locally on /global_map and
+        # /global_routes (see robot_1_launch.yaml/robot_2_launch.yaml's
+        # "incoming_map"/"incoming_routes" remaps on system_main).
+        - node:
+            pkg: "easyfleet_navigation_manager"
+            exec: "navigation_manager_node"
+            output: "screen"
+            env:
+              - name: "RMW_IMPLEMENTATION"
+                value: "rmw_zenoh_cpp"
+              - name: "ZENOH_SESSION_CONFIG_URI"
+                value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_session_central.json5"
+            param:
+              - name: "use_sim_time"
+                value: true
+              - from: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/navigation_manager.params.yaml"
+
+        # Fleet-wide view: navigation_manager_node's own topics
+        # (/global_map, /global_routes_markers, /global_routes_imarkers/...)
+        # are all unnamespaced, so this rviz2 needs no remap -- unlike
+        # robot_1_launch.yaml/robot_2_launch.yaml's own rviz2, which is
+        # per-robot-namespaced.
+        - node:
+            pkg: "rviz2"
+            exec: "rviz2"
+            output: "screen"
+            env:
+              - name: "RMW_IMPLEMENTATION"
+                value: "rmw_zenoh_cpp"
+              - name: "ZENOH_SESSION_CONFIG_URI"
+                value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_session_central.json5"
+            args: "-d $(find-pkg-share easyfleet_easynav_deployment)/rviz/navigation_manager.rviz"
+            param:
+              - name: "use_sim_time"
+                value: true
+
+        - timer:
+            period: 5.0
+            children:
+              - node:
+                  pkg: "easyfleet_easynav_collaboration_zenoh_deployment"
+                  exec: "easynav_collaboration_mission_node"
+                  output: "screen"
+                  env:
+                    - name: "RMW_IMPLEMENTATION"
+                      value: "rmw_zenoh_cpp"
+                    - name: "ZENOH_SESSION_CONFIG_URI"
+                      value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_session_central.json5"
+                  param:
+                    - name: "use_sim_time"
+                      value: true

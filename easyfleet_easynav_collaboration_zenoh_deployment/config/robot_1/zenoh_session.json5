@@ -1,0 +1,49 @@
+// Copyright 2026 Intelligent Robotics Lab
+//
+// This file is part of the project EasyFleet
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Zenoh session for every one of robot_1's local ROS 2 nodes: system_main,
+// its navigation capability node, robot_node, its own rviz2, and everything
+// spawned for it by easynav_playground_kobuki's Kobuki simulation
+// (robot_state_publisher, joint_state_publisher, the Gazebo bridge, ...).
+// One shared file is safe here (unlike an earlier version of this config
+// that needed a distinct fixed `id` per node): robot_1/zenoh_router.json5's
+// ACL now recognizes "a local client" by *connecting over the Unix domain
+// socket* (link_protocols), not by identity, so any number of processes can
+// share this file -- validated directly that several concurrent unix-socket
+// clients with no fixed id coexist without the collision a shared fixed id
+// used to cause (see zenoh.md).
+//
+// mode: "peer" (not "client", despite these being pure local clients) --
+// found empirically that "client" mode silently breaks delivery of
+// TRANSIENT_LOCAL/latched publications (robot_description, /capabilities'
+// JSON payload, ...) to a subscriber that joins after the one-shot publish;
+// switching to "peer" (the same mode rmw_zenoh's own default session config
+// uses) fixes it.
+//
+// Tried adding `gossip.autoconnect.peer: []` as defense in depth (so a
+// local peer could never auto-connect straight to a gossip-discovered
+// remote router, bypassing this robot's own router/ACL) -- empirically that
+// setting *also* breaks the same TRANSIENT_LOCAL delivery this mode change
+// was meant to fix, so it is intentionally left at its default here. The
+// actual isolation guarantee doesn't depend on it anyway: it's enforced by
+// robot_1/zenoh_router.json5's ACL on the boundary link itself (confirmed
+// directly that a non-whitelisted topic still does not reach the central
+// island with this exact session config). See zenoh.md for the full
+// investigation, including why the ACL still holds regardless.
+{
+  mode: "peer",
+  connect: { endpoints: ["unixsock-stream//tmp/easyfleet_robot_1_zenoh.sock"] },
+  scouting: { multicast: { enabled: false } },
+}

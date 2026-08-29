@@ -1,0 +1,294 @@
+// Copyright 2026 Intelligent Robotics Lab
+//
+// This file is part of the project EasyFleet
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// robot_1's own Zenoh island router. Every one of robot_1's ROS 2 nodes
+// (system_main, its navigation capability node, robot_node, its own rviz2,
+// and everything spawned by easynav_playground_kobuki's Kobuki simulation --
+// see launch/robot_1_launch.yaml and the deployment's Gazebo launcher)
+// connects only to this router, never directly to the central one. This
+// router in turn connects out to the central router
+// (zenoh_router_central.json5) and applies access_control so that only what
+// the fleet-wide layer of this deployment actually needs crosses that link
+// -- everything else (odom, scan, TF, costmaps, local rviz displays, ...)
+// never leaves the island. See zenoh.md for the full design discussion and
+// the prototypes that validated this ACL shape.
+//
+// Port/endpoint scheme: this deployment's example runs every robot plus the
+// central island on one machine, so each router needs a distinct local
+// endpoint -- "7447 + robot index" for the TCP port (central = 7447,
+// robot_1 = 7448, robot_2 = 7449). In a real multi-host deployment every
+// router would instead use the default 7447 on its own host, and `connect`
+// below would point at the central host's real address.
+//
+// Subject matching: "which link is this message on" is identified by
+// *transport protocol*, not identity -- local ROS nodes (this robot's own
+// plus anything spawned for it, an unbounded/unknown-in-advance set once
+// Gazebo/Kobuki nodes are included) connect over a Unix domain socket
+// (`unixsock-stream`), while the single uplink to the central router is the
+// only thing using `tcp` on this router. This replaced an earlier version
+// of this file that tried to whitelist local clients by a hardcoded list of
+// fixed zenoh ids: that doesn't scale to a Kobuki spawn that creates a
+// variable number of extra local processes (robot_state_publisher,
+// joint_state_publisher, ros_gz bridges, ...) we don't individually control
+// the launch of, and sharing one fixed id between several of them collides
+// (confirmed directly while prototyping -- see zenoh.md). Validated
+// end-to-end (data crosses/is blocked exactly as expected, and many
+// concurrent unix-socket clients coexist fine with no id of their own) --
+// see zenoh.md. In a real multi-host deployment, `interfaces` (the uplink's
+// physical NIC vs. the robot's local loopback/socket) is the equivalent
+// mechanism -- not yet validated against real hardware, see zenoh.md
+// "Abierto" punto 6.
+{
+  id: "5af3c8b0110141e2b6d07a1b6b8cbd8b",
+  mode: "router",
+  connect: { endpoints: ["tcp/127.0.0.1:7447"] },
+  listen: { endpoints: ["unixsock-stream//tmp/easyfleet_robot_1_zenoh.sock", "tcp/127.0.0.1:7448"] },
+  scouting: { multicast: { enabled: false } },
+  access_control: {
+    enabled: true,
+    default_permission: "deny",
+    rules: [
+      {
+        // Everything within the island is unrestricted -- namespacing was
+        // dropped for purely-internal resources (see zenoh.md pregunta 2),
+        // so there is nothing to whitelist here beyond "any of robot_1's
+        // own local nodes can talk to any other of robot_1's own local
+        // nodes".
+        id: "allow_local",
+        messages: [
+          "put", "delete", "declare_subscriber",
+          "query", "reply", "declare_queryable",
+          "liveliness_token", "liveliness_query", "declare_liveliness_subscriber",
+        ],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        // "**/@adv/**" and "@ros2_lv/**" alongside the blanket "**": "**"
+        // does not implicitly match a segment starting with "@" (confirmed
+        // the hard way twice -- see allow_boundary_data's TRANSIENT_LOCAL
+        // comment, and allow_boundary_liveliness below). Without
+        // "@ros2_lv/**" here, even a *local* client's own liveliness token
+        // declaration gets denied at this router before it could ever be
+        // considered for forwarding anywhere -- confirmed with
+        // RUST_LOG=...access_control=trace showing a plain action server's
+        // liveliness token rejected on ingress from its own (local,
+        // unixsock-stream) session.
+        key_exprs: ["**", "**/@adv/**", "@ros2_lv/**"],
+      },
+      {
+        // The boundary contract for robot_1 (see zenoh.md pregunta 3):
+        //   - /capabilities, /capabilities_status: robot -> central,
+        //     capability-discovery rendezvous (disambiguated by the
+        //     "robot" field in the message payload, not by topic name --
+        //     see easyfleet_mission_manager/capability_discovery.cpp).
+        //   - /global_map, /global_routes: central -> robot, published by
+        //     navigation_manager_node (see
+        //     easynav_collaboration_launch.yaml and the incoming_map/
+        //     incoming_routes remaps in robot_1_launch.yaml).
+        //   - /clock: central -> robot. Bridged from Gazebo by a single
+        //     shared ros_gz_bridge node that lives in the central island
+        //     (see the deployment's Gazebo launcher) -- every island that
+        //     sets use_sim_time needs it.
+        //   - /mission_status_markers: central -> robot. Published by
+        //     mission_control's StatusMarkerPublisher; each robot_N.rviz in
+        //     this package already has a MarkerArray display subscribed to
+        //     it (see rviz/robot_1.rviz) so watching that robot's own RViz
+        //     shows its current mission status -- without this entry that
+        //     subscription just sits there with nothing ever arriving.
+        //   - /robot_1/navigation, /robot_1/perception: the two capability
+        //     actions this robot exposes (see robot_1_launch.yaml), called
+        //     directly by name from easyfleet_mission_manager's
+        //     RunningCapability. Confirmed empirically that rmw_zenoh keeps
+        //     the ROS namespace as real "/"-delimited key-expression
+        //     segments (not a single mangled token), so this hierarchical
+        //     pattern matches the action's whole family of
+        //     send_goal/cancel/get_result/feedback/status sub-names via the
+        //     trailing "**" -- *except* the "@adv" suffix case below, same
+        //     as every other TRANSIENT_LOCAL topic here: rclcpp_action
+        //     publishes its "_action/status" topic TRANSIENT_LOCAL too (so
+        //     a client that (re)connects mid-goal still gets the current
+        //     status), so it needs its own "*/<action>/**/@adv/**" entry
+        //     just like /capabilities -- without it, goal status updates
+        //     silently never cross for a client that wasn't already
+        //     watching before the first one, which is exactly why a goal
+        //     sent by mission_control (across the boundary) can time out
+        //     into UNREACHABLE while the same navigation works fine when
+        //     driven from RViz2 (purely local, no boundary involved).
+        // liveliness_token is included here too, but on its own it is NOT
+        // enough for actions specifically -- see allow_boundary_liveliness
+        // below and its comment for why (correcting an earlier read of
+        // point 7 in zenoh.md: "tui/cli don't need dynamic graph discovery"
+        // is still true, but it turns out mission_control's *own* action
+        // calls do, via rclcpp_action's readiness check).
+        // /capabilities, /global_map and /global_routes are all published
+        // TRANSIENT_LOCAL (once, latched -- see the publishers cited
+        // above), so a *late-joining* subscriber on the other side of this
+        // boundary (e.g. mission_control's discovery window, which starts
+        // well after each robot's one-shot /capabilities publish) doesn't
+        // get the sample via a plain "put" at all: it retrieves it through
+        // Zenoh's Advanced-Publisher cache-recovery query, whose key is the
+        // plain data key with a "/@adv/pub/<publisher_id>/<seq>/_" suffix
+        // appended (confirmed empirically with
+        // RUST_LOG=...access_control=trace). That matters here because a
+        // "**" wildcard does *not* implicitly match a path segment that
+        // starts with "@" -- confirmed the same way: a rule scoped to just
+        // "*/capabilities/**" (or even a blanket "**") denies that specific
+        // query, while adding an explicit ".../@adv/**" pattern allows it.
+        // Every "*/<name>/**" entry below therefore has a matching
+        // "*/<name>/**/@adv/**" entry; skipping it silently breaks late
+        // joiners only, which is exactly what caused "(could not parse the
+        // JSON description published on /capabilities)" in earlier
+        // end-to-end tests -- see zenoh.md (2026-08-29) for the full
+        // investigation.
+        id: "allow_boundary_data",
+        messages: [
+          "put", "delete", "declare_subscriber",
+          "query", "reply", "declare_queryable",
+          "liveliness_token",
+        ],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: [
+          "*/capabilities/**",
+          "*/capabilities/**/@adv/**",
+          "*/capabilities_status/**",
+          "*/global_map/**",
+          "*/global_map/**/@adv/**",
+          "*/global_routes/**",
+          "*/global_routes/**/@adv/**",
+          "*/clock/**",
+          "*/mission_status_markers/**",
+          "*/mission_status_markers/**/@adv/**",
+          "*/robot_1/navigation/**",
+          "*/robot_1/navigation/**/@adv/**",
+          "*/robot_1/perception/**",
+          "*/robot_1/perception/**/@adv/**",
+          // robot -> central, TRANSIENT_LOCAL (robot_state_publisher):
+          // needed for the fleet-wide RViz2 (navigation_manager.rviz) to
+          // render this robot's RobotModel display.
+          "*/robot_1/robot_description/**",
+          "*/robot_1/robot_description/**/@adv/**",
+          // navigation_manager_node's inter-robot collision arbitration
+          // (RobotNavigationWatcher, easyfleet_navigation_manager): watches
+          // this robot's planned path (robot -> central,
+          // /robot_1/planner_node/<plugin>/path, nav_msgs/Path) to detect
+          // conflicts with other robots, and both sends PAUSE/RESUME
+          // commands and receives their ack back over the *same*
+          // /robot_1/easynav_control topic (bidirectional -- unlike /tf,
+          // this one is already per-robot-namespaced so there's no
+          // cross-robot mixing risk from allowing it symmetrically, same as
+          // the capability actions above). Neither is TRANSIENT_LOCAL, so
+          // no "@adv" twin needed. Already namespaced with a wildcard
+          // segment for the planner plugin key (default "simple", see
+          // config/navigation_manager.params.yaml) rather than hardcoding
+          // it, so this doesn't silently break if that param changes.
+          "*/robot_1/planner_node/**",
+          "*/robot_1/easynav_control/**",
+        ],
+      },
+      {
+        // Discovered the hard way (2026-08-29): easyfleet_core::ActionClient
+        // (like plain rclcpp_action) calls action_server_is_ready() before
+        // ever sending a goal, and returns SERVER_UNAVAILABLE
+        // (-> CapabilityState::UNREACHABLE) immediately if it says no --
+        // without even attempting send_goal. That readiness check is
+        // answered from rmw_zenoh's graph cache, populated by liveliness
+        // tokens (the "@ros2_lv/..." namespace), which is a *different*
+        // mechanism than the data-plane put/query/reply in
+        // allow_boundary_data above. Without this rule, every single
+        // capability action call from mission_control (across this
+        // boundary) reports UNREACHABLE with no error anywhere -- even a
+        // deterministic mock like manipulation -- while the exact same
+        // action works fine driven from something local to this island
+        // (e.g. a 2D Nav Goal in this robot's own RViz2), because purely
+        // local traffic never needed this rule at all.
+        // Confirmed empirically end-to-end with a real, unmodified ROS 2
+        // action (action_tutorials_cpp's Fibonacci demo) across this exact
+        // ACL: send_goal/feedback/result all completed successfully with
+        // this rule in place, and reproduced the hang without it.
+        // Deliberately broad ("@ros2_lv/**", not scoped by name like
+        // allow_boundary_data): liveliness tokens use a separately-mangled
+        // namespace segment (per rmw_zenoh's design.md) that we have not
+        // reverse-engineered per-entity-kind, and getting this narrower
+        // would only reduce how much of the graph's *existence* the central
+        // island can see (node/topic/service names) -- it does not affect
+        // the data-plane whitelist above, which still governs what
+        // actual *data* can cross. See zenoh.md (2026-08-29) for the
+        // investigation and this trade-off.
+        id: "allow_boundary_liveliness",
+        messages: ["liveliness_token", "liveliness_query", "declare_liveliness_subscriber"],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: ["@ros2_lv/**"],
+      },
+      {
+        // /tf and /tf_static are deliberately NOT in allow_boundary_data:
+        // they're absolute, unnamespaced topics (see zenoh.md pregunta 4),
+        // so if crossed bidirectionally like everything else here, whatever
+        // central forwards back in -- which, once the fleet-wide RViz2 also
+        // wants robot_2's TF merged onto the very same "/tf" key, would
+        // include robot_2's frames too -- would land right back in this
+        // island, defeating the entire point of keeping each robot's TF
+        // tree private. Interest/query propagation (this rule) still needs
+        // to flow both ways for routing to work at all (this is how a
+        // *subscriber* on the other end tells this router "please forward
+        // me matching data"), but the actual DATA-carrying message types
+        // (next rule) are deliberately egress-only: robot_1's own /tf can
+        // leave towards the central island's merged view, but nothing
+        // coming back over this same link can ever re-enter robot_1's own
+        // island. Confirmed empirically: a subscriber connected to this
+        // island only ever received robot_1's own /tf, never a second
+        // publisher's /tf injected directly on the central side (simulating
+        // robot_2's), while a subscriber on the central side correctly saw
+        // both. See zenoh.md (2026-08-29).
+        id: "allow_tf_boundary_meta",
+        messages: ["declare_subscriber", "query", "declare_queryable"],
+        flows: ["egress", "ingress"],
+        permission: "allow",
+        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+      },
+      {
+        // The actual DATA for /tf, /tf_static -- egress only, see
+        // allow_tf_boundary_meta above for why. /tf_static is
+        // TRANSIENT_LOCAL (standard ROS 2 convention), hence its "@adv"
+        // twin, same reasoning as every other latched topic in this file;
+        // "reply" (how a late joiner's cache-recovery query gets answered)
+        // is included here, egress-only, for the same reason as put/delete
+        // -- robot_1 answers central's query about its own tf_static, it
+        // never needs to receive a "reply" itself over this link.
+        id: "allow_tf_boundary_data_out",
+        messages: ["put", "delete", "reply"],
+        flows: ["egress"],
+        permission: "allow",
+        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+      },
+    ],
+    subjects: [
+      { id: "local_clients", link_protocols: ["unixsock-stream"] },
+      { id: "central_link", link_protocols: ["tcp"] },
+    ],
+    policies: [
+      { rules: ["allow_local"], subjects: ["local_clients"] },
+      {
+        rules: [
+          "allow_boundary_data",
+          "allow_boundary_liveliness",
+          "allow_tf_boundary_meta",
+          "allow_tf_boundary_data_out",
+        ],
+        subjects: ["central_link"],
+      },
+    ],
+  },
+}

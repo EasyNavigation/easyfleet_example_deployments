@@ -1,0 +1,37 @@
+// Copyright 2026 Intelligent Robotics Lab
+//
+// This file is part of the project EasyFleet
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Session config for every ROS 2 node that lives in the central island
+// (navigation_manager_node, easynav_collaboration_mission_node, the
+// fleet-wide rviz2, and any future tui/cli tool): connects to
+// zenoh_router_central.json5. Shared by all of them -- no fixed "id" here
+// (unlike the per-robot session configs), since the central router has no
+// ACL that needs to recognize individual local clients by zid, so there's
+// no reason to risk an id collision between simultaneously running
+// central-side processes (see zenoh.md's prototype notes on why a shared
+// fixed id broke a second concurrent session).
+//
+// mode: "peer" -- see robot_1/zenoh_session.json5 for why: "client" mode
+// silently breaks delivery of TRANSIENT_LOCAL/latched publications (here,
+// most importantly, the JSON payload published once on `/capabilities`) to
+// a subscriber that joins after the one-shot publish, which is exactly
+// mission_control's discovery pattern. (No `gossip.autoconnect` override
+// here either -- see that file for why: it breaks the very delivery this
+// mode change fixes.)
+{
+  mode: "peer",
+  connect: { endpoints: ["tcp/127.0.0.1:7447"] },
+  scouting: { multicast: { enabled: false } },
+}
