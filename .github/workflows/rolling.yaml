@@ -1,0 +1,39 @@
+name: rolling
+
+on:
+  pull_request:
+    branches:
+      - rolling
+  push:
+    branches:
+      - rolling
+  schedule:
+      - cron: '0 0 * * 6'
+  workflow_dispatch:
+jobs:
+  build-and-test:
+    runs-on: ubuntu-26.04
+    container:
+      image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-resolute-ros-rolling-ros-base:master
+    steps:
+      - uses: actions/checkout@v6
+      - name: build and test
+        uses: ros-tooling/action-ros-ci@0.4.8
+        with:
+          package-name: >-
+            easyfleet_fake_alone_deployment
+            easyfleet_fake_collaboration_deployment
+            easyfleet_easynav_deployment
+            easyfleet_easynav_collaboration_deployment
+            easyfleet_easynav_collaboration_simple_api_deployment
+            easyfleet_easynav_collaboration_simple_api_deployment_py
+            easyfleet_easynav_collaboration_zenoh_deployment
+            easyfleet_easynav_collaboration_fastdds_deployment
+          target-ros2-distro: rolling
+          vcs-repo-file-url: ${GITHUB_WORKSPACE}/easyfleet_example_deployments.repos
+          colcon-defaults: |
+            {
+              "test": {
+                "parallel-workers": 1
+              }
+            }

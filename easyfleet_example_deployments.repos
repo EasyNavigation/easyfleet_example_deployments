@@ -1,0 +1,34 @@
+repositories:
+  EasyFleet:
+    type: git
+    url: https://github.com/EasyNavigation/EasyFleet.git
+    version: rolling
+  EasyNavigation:
+    type: git
+    url: https://github.com/EasyNavigation/EasyNavigation.git
+    version: rolling
+  easynav_plugins:
+    type: git
+    url: https://github.com/EasyNavigation/easynav_plugins.git
+    version: rolling
+  NavMap:
+    type: git
+    url: https://github.com/EasyNavigation/NavMap.git
+    version: rolling
+  yaets:
+    type: git
+    url: https://github.com/fmrico/yaets.git
+    version: rolling
+  easynav_playground_kobuki:
+    type: git
+    url: https://github.com/EasyNavigation/easynav_playground_kobuki.git
+    version: rolling
+  easynav_playground_summit:
+    type: git
+    url: https://github.com/EasyNavigation/easynav_playground_summit.git
+    version: rolling
+  # No released .deb for rolling (needed by easynav_fusion_localizer).
+  robot_localization:
+    type: git
+    url: https://github.com/cra-ros-pkg/robot_localization.git
+    version: rolling-devel
