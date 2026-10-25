@@ -23,12 +23,10 @@ repositories:
     type: git
     url: https://github.com/EasyNavigation/easynav_playgrounds.git
     version: rolling
-  # fmrico's branch until juanscelyg/large_warehouse_world#1 is merged: packages under
-  # the Warehouse A racks, ODE collisions and large_warehouse_world_a.sdf.
   large_warehouse_world:
     type: git
-    url: https://github.com/fmrico/large_warehouse_world.git
-    version: fill_racks
+    url: https://github.com/juanscelyg/large_warehouse_world.git
+    version: main
   # PlanSys2 with Kairos, for easyfleet_plansys2_warehouse_deployment.
   ros2_planning_system:
     type: git
