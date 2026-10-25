@@ -1,0 +1,85 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Gazebo with Warehouse A of large_warehouse_world and four Kobukis in its
+# central plaza, at world (100, 300), (102, 301), (104, 300) and (106, 301):
+# (0, 0), (2, 1), (4, 0) and (6, 1) in the warehouse map, the robots' homes.
+# Each robot's topics and TF tree are under its namespace (robot_1..robot_4).
+# Also starts the Zenoh router. Run it before warehouse_launch.yaml.
+
+launch:
+  - arg: {name: "gui", default: "true", description: "Set to false to run Gazebo headless"}
+  # At 12 m the lidar sees almost nothing in the open areas of the warehouse; at 30 m, 200+ of 360 rays hit.
+  - arg: {name: "lidar_range", default: "30.0", description: "Maximum lidar range (m)"}
+  # Each Kobuki carries a cylinder at lidar height (lidar_target) so the others' lidars see it.
+  # Warehouse A furniture only: with the whole world's, the lidars slow the simulation down.
+  - arg:
+      name: "world"
+      default: "$(find-pkg-share large_warehouse_world)/worlds/large_warehouse_world_a.sdf"
+      description: "World file (large_warehouse_world.sdf for the whole furnished world)"
+  # Zenoh by default: the router every node of this example connects to.
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+  - executable:
+      cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
+      output: "screen"
+  # Gazebo finds the warehouse models here (the playground adds its own).
+  - set_env:
+      name: "GZ_SIM_RESOURCE_PATH"
+      value: "$(find-pkg-share large_warehouse_world)/models:$(env GZ_SIM_RESOURCE_PATH '')"
+  - include:
+      file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/world.launch.yaml"
+      arg:
+        - {name: "world", value: "$(var world)"}
+        - {name: "gui", value: "$(var gui)"}
+  - include:
+      file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+      arg:
+        - {name: "name", value: "kobuki_1"}
+        - {name: "namespace", value: "robot_1"}
+        - {name: "x", value: "100.0"}
+        - {name: "y", value: "300.0"}
+        - {name: "z", value: "0.05"}
+        - {name: "lidar_range", value: "$(var lidar_range)"}
+        - {name: "lidar_target", value: "true"}
+  - include:
+      file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+      arg:
+        - {name: "name", value: "kobuki_2"}
+        - {name: "namespace", value: "robot_2"}
+        - {name: "x", value: "102.0"}
+        - {name: "y", value: "301.0"}
+        - {name: "z", value: "0.05"}
+        - {name: "lidar_range", value: "$(var lidar_range)"}
+        - {name: "lidar_target", value: "true"}
+  - include:
+      file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+      arg:
+        - {name: "name", value: "kobuki_3"}
+        - {name: "namespace", value: "robot_3"}
+        - {name: "x", value: "104.0"}
+        - {name: "y", value: "300.0"}
+        - {name: "z", value: "0.05"}
+        - {name: "lidar_range", value: "$(var lidar_range)"}
+        - {name: "lidar_target", value: "true"}
+  - include:
+      file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+      arg:
+        - {name: "name", value: "kobuki_4"}
+        - {name: "namespace", value: "robot_4"}
+        - {name: "x", value: "106.0"}
+        - {name: "y", value: "301.0"}
+        - {name: "z", value: "0.05"}
+        - {name: "lidar_range", value: "$(var lidar_range)"}
+        - {name: "lidar_target", value: "true"}

@@ -1,0 +1,152 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# robot_1's DDS Router bridge: connects robot_1's own ROS_DOMAIN_ID (1) with
+# the central island's (0), forwarding only the same boundary contract
+# documented for the Zenoh-island sibling deployment (see
+# easyfleet_easynav_collaboration_zenoh_deployment/config/robot_1/zenoh_router.json5
+# and easyfleet_ws/fastdds.md for the full design discussion and the
+# empirical findings behind every choice below).
+#
+# Everything NOT listed in `allowlist` never crosses this bridge at all
+# (odom, scan, local costmaps, this robot's own rviz displays, ...) -- DDS
+# Router's default with an allowlist configured is to forward nothing except
+# what matches it, so an unlisted topic fails *closed*, not open.
+#
+# Topic names use the ROS 2 DDS wire-mangled form (`rt/<topic>`), not the
+# plain ROS name -- both `allowlist`/`topics` (QoS overrides) and
+# `topic-routes` match against the literal DDS topic name, and a plain
+# unmangled name here would simply never match anything (see fastdds.md,
+# 2026-08-29, for how this was discovered and confirmed with DDS Router's
+# own `kind: echo` participant).
+participants:
+  - name: robot_domain
+    kind: local
+    domain: 1
+
+  - name: central_domain
+    kind: local
+    domain: 0
+
+allowlist:
+  # Capability discovery rendezvous (robot -> central) and fleet-wide
+  # map/routes (central -> robot, published by navigation_manager_node) --
+  # see robot_1_launch.yaml's incoming_map/incoming_routes remaps.
+  - name: "*capabilities"
+  - name: "*capabilities_status"
+  - name: "*global_map"
+  - name: "*global_routes"
+  # Sim time, bridged from Gazebo by a single ros_gz_bridge node living in
+  # the central island (every island using use_sim_time needs it).
+  - name: "*clock"
+  # mission_control's StatusMarkerPublisher (central -> robot); each
+  # robot_N.rviz already has a MarkerArray display subscribed to it.
+  - name: "*mission_status_markers"
+  # robot_1's own capability actions (navigation, perception), called
+  # directly by name from easyfleet_mission_manager's RunningCapability.
+  # The wildcard covers the whole family of hidden send_goal/cancel_goal/
+  # get_result services and feedback/status topics an action decomposes
+  # into, regardless of the rq/rr/rt DDS-mangling prefix each gets.
+  - name: "*robot_1/navigation*"
+  - name: "*robot_1/perception*"
+  # navigation_manager_node's inter-robot collision arbitration
+  # (RobotNavigationWatcher): watches this robot's planned path and
+  # exchanges PAUSE/RESUME/ack over easynav_control. Both already
+  # per-robot-namespaced, so no cross-robot mixing risk from allowing them
+  # bidirectionally (unlike /tf below).
+  - name: "*robot_1/planner_node*"
+  - name: "*robot_1/easynav_control*"
+  # This robot's own TF (/robot_1/tf, /robot_1/tf_static): for the
+  # central navigation_manager_node's fleet view (robots.relay_tf). See
+  # topic-routes below for why it only flows robot -> central.
+  - name: "rt/robot_1/tf"
+  - name: "rt/robot_1/tf_static"
+
+# Manual QoS overrides: DDS Router does not auto-propagate a topic's
+# discovered durability by default -- a TRANSIENT_LOCAL publisher's late
+# joiners on the other side of the bridge get nothing unless the matching
+# `topics:` entry here explicitly forces `durability: true` (+ `reliability:
+# true`, since the two must be configured together -- an incompatible
+# BEST_EFFORT/TRANSIENT_LOCAL combination is otherwise possible). Confirmed
+# empirically (fastdds.md, 2026-08-29): without this, a late-joining
+# subscriber across the bridge never receives the cached last sample, even
+# though live delivery works fine.
+topics:
+  - name: "*capabilities"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*global_map"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*global_routes"
+    qos:
+      durability: true
+      reliability: true
+  # Forces the whole navigation/perception action family transient_local --
+  # slightly broader than strictly necessary (only the _action/status
+  # sub-topic is actually TRANSIENT_LOCAL by ROS 2 convention; the hidden
+  # services and the feedback topic are RELIABLE/VOLATILE by default), but
+  # harmless: a service/feedback consumer only ever waits for a fresh
+  # reply/feedback matched by its own sequence number, so caching old ones
+  # has no functional effect.
+  - name: "*robot_1/navigation*"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*robot_1/perception*"
+    qos:
+      durability: true
+      reliability: true
+  - name: "rt/robot_1/tf_static"
+    qos:
+      durability: true
+      reliability: true
+
+# /tf and /tf_static are deliberately NOT bidirectional like everything
+# above: they're absolute, unnamespaced topics, so if crossed both ways,
+# whatever the central island forwards back in -- once the fleet-wide RViz2
+# also merges robot_2's /tf onto this very same "/tf" key -- would land
+# right back in robot_1's own domain, defeating the whole point of keeping
+# each robot's TF tree private (see zenoh.md's identical concern for the
+# Zenoh-island sibling deployment, and fastdds.md 2026-08-29 for how this
+# was validated here: a participant listed as `src` with no `dst` forwards
+# nothing, so central_domain's own route below never sends data back to
+# robot_domain).
+#
+# `type` is mandatory for `topic-routes` (unlike `allowlist`/`topics`, where
+# it's optional) and, unlike there, does NOT accept a "*" wildcard -- an
+# unmatched wildcard here silently falls back to full bidirectional
+# forwarding, i.e. fails *open* on exactly the case we need to fail closed.
+# The exact DDS type name (not the ROS "tf2_msgs/msg/TFMessage" name) was
+# obtained empirically with a `kind: echo`, `discovery: true` participant
+# (see fastdds.md).
+topic-routes:
+  - name: "rt/robot_1/tf"
+    type: "tf2_msgs::msg::dds_::TFMessage_"
+    routes:
+      - src: robot_domain
+        dst:
+          - central_domain
+      - src: central_domain
+
+  - name: "rt/robot_1/tf_static"
+    type: "tf2_msgs::msg::dds_::TFMessage_"
+    routes:
+      - src: robot_domain
+        dst:
+          - central_domain
+      - src: central_domain

@@ -1,0 +1,87 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Waypoints of every robot's navigation capability, named as the locations of
+# pddl/warehouse.pddl (map frame, origin at the center of Warehouse A): the
+# robots' homes in the central plaza, rack bays in the aisles of the bottom
+# block and the docks at the end of the dock spurs of maps/warehouse_a_routes.yaml.
+# The controller reads the same file to give the planner the distances.
+/**:
+  ros__parameters:
+    navigation:
+      allow_preemption: true
+      tick_rate_hz: 10.0
+      waypoint_ids: ["home_1", "home_2", "home_3", "home_4", "bay_1", "bay_2", "bay_3", "bay_4", "dock_2", "dock_3", "dock_4", "dock_5"]
+      waypoints:
+        home_1:
+          frame_id: "map"
+          x: 0.0
+          y: 0.0
+          yaw: 0.0
+        home_2:
+          frame_id: "map"
+          x: 2.0
+          y: 1.0
+          yaw: 0.0
+        home_3:
+          frame_id: "map"
+          x: 4.0
+          y: 0.0
+          yaw: 0.0
+        home_4:
+          frame_id: "map"
+          x: 6.0
+          y: 1.0
+          yaw: 0.0
+        bay_1:
+          frame_id: "map"
+          x: -28.3
+          y: -15.0
+          yaw: -1.57
+        bay_2:
+          frame_id: "map"
+          x: -12.5
+          y: -15.0
+          yaw: -1.57
+        bay_3:
+          frame_id: "map"
+          x: 12.9
+          y: -15.0
+          yaw: -1.57
+        bay_4:
+          frame_id: "map"
+          x: 28.5
+          y: -15.0
+          yaw: -1.57
+        dock_2:
+          frame_id: "map"
+          x: -37.1
+          y: -89.5
+          yaw: -1.57
+        dock_3:
+          frame_id: "map"
+          x: -12.1
+          y: -89.3
+          yaw: -1.57
+        dock_4:
+          frame_id: "map"
+          x: 12.9
+          y: -89.3
+          yaw: -1.57
+        dock_5:
+          frame_id: "map"
+          x: 37.9
+          y: -90.0
+          yaw: -1.57

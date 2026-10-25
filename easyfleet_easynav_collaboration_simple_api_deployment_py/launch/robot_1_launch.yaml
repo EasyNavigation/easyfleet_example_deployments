@@ -1,0 +1,91 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This deployment's own robot_1: identical to the C++ sibling package's
+# robot_1_launch.yaml (real EasyNav navigation, same config/rviz, reused
+# directly) except the fake perception capability is this package's own
+# Python perception_fake_capability_node instead of that package's
+# pluginlib-loaded C++ "robot_node" -- see
+# perception_fake_capability.py for the reference implementation and
+# easyfleet_mission_manager_py's Capability/ActionServerBase for what it's
+# built on. Config files (perception_params.yaml, perception.json) are
+# reused directly from the C++ sibling package: they are plain
+# YAML/JSON, not C++-specific.
+launch:
+  - arg: {name: "rviz", default: "true", description: "Open this robot's own rviz2"}
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+  - group:
+      - push_ros_namespace:
+          namespace: "robot_1"
+
+      - node:
+          pkg: "easynav_system"
+          exec: "system_main"
+          output: "screen"
+          param:
+            - from: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/robot_1/easynav_system.costmap_rpp.params.yaml"
+            - name: "tf_prefix"
+              value: "robot_1"
+          remap:
+            # Each robot has its own TF tree, under its namespace (/robot_N/tf).
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
+            - from: "maps_manager_node/costmap/incoming_map"
+              to: "/global_map"
+            - from: "maps_manager_node/routes/incoming_routes"
+              to: "/global_routes"
+
+      - node:
+          pkg: "easyfleet_easynav_deployment"
+          exec: "easynav_navigation_capability_node"
+          name: "navigation"
+          output: "screen"
+          param:
+            - from: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/navigation_params.yaml"
+            - name: "behavior_tree_xml"
+              value: "$(find-pkg-share easyfleet_easynav_deployment)/behavior_trees/navigate.xml"
+            - name: "bt_plugins"
+              value:
+                - "$(find-pkg-prefix easyfleet_easynav_navigation)/lib/libeasynav_navigate_bt_node.so"
+                - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libstart_off_bt_node.so"
+                - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libfinish_bt_node.so"
+            - name: "capabilities_file"
+              value: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/navigation.json"
+
+      - node:
+          pkg: "easyfleet_easynav_collaboration_simple_api_deployment_py"
+          exec: "perception_fake_capability_node"
+          output: "screen"
+          param:
+            - from: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/robot_1/perception_params.yaml"
+            - name: "capabilities_file"
+              value: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/robot_1/perception.json"
+
+      - node:
+          if: "$(var rviz)"
+          pkg: "rviz2"
+          exec: "rviz2"
+          output: "screen"
+          remap:
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
+          args: "-d $(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/rviz/robot_1.rviz"
+          param:
+            - name: "use_sim_time"
+              value: true

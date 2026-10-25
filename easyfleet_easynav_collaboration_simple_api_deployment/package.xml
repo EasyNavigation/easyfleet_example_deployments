@@ -44,6 +44,15 @@
   <exec_depend>easyfleet_navigation_manager</exec_depend>
   <exec_depend>easynav_system</exec_depend>
 
+  <exec_depend>easynav_costmap_localizer</exec_depend>
+  <exec_depend>easynav_costmap_maps_manager</exec_depend>
+  <exec_depend>easynav_costmap_planner</exec_depend>
+  <exec_depend>easynav_regulated_pp_controller</exec_depend>
+  <exec_depend>easynav_routes_maps_manager</exec_depend>
+  <exec_depend>easynav_playground_kobuki_worlds</exec_depend>
+  <exec_depend>rmw_zenoh_cpp</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>

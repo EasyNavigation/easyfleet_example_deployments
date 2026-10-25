@@ -19,7 +19,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <thread>
 
 #include "behaviortree_cpp/bt_factory.h"
 #include "easynav_system/GoalManagerClient.hpp"
@@ -84,14 +83,15 @@ private:
   std::string behavior_tree_xml_;
   double tick_rate_hz_;
 
+  /// Cancel EasyNav's navigation and process its answer (up to 1 s).
+  void cancel_and_wait();
+
   // GoalManagerClient needs a plain rclcpp::Node::SharedPtr, but this
   // capability is an rclcpp_lifecycle::LifecycleNode -- so, same pattern as
   // easyfleet_core::ActionClient, it owns a small internal node dedicated
-  // to talking to EasyNav, spun on its own background thread for the
-  // capability's whole lifetime.
+  // to talking to EasyNav, spun from on_execute() (no extra thread).
   rclcpp::Node::SharedPtr internal_node_;
   rclcpp::executors::SingleThreadedExecutor::SharedPtr executor_;
-  std::thread spin_thread_;
 
   // One instance for the capability's entire lifetime (not per ROS goal):
   // this is what lets a new goal preempt an in-flight one at the EasyNav

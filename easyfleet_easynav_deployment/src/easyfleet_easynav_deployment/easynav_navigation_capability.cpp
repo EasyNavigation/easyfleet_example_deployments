@@ -133,12 +133,10 @@ EasynavNavigationActionServer::EasynavNavigationActionServer(
 
   gm_client_ = easynav::GoalManagerClient::make_shared(internal_node_);
 
+  // Spun from on_execute() only (the one thread that also ticks the tree),
+  // so gm_client_ is never touched from two threads at once.
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor_->add_node(internal_node_);
-  spin_thread_ = std::thread([this] {executor_->spin();});
-  while (!executor_->is_spinning()) {
-    std::this_thread::yield();
-  }
 
   // Every BT node this tree can use -- including this package's own
   // Navigate -- is loaded as a plugin by path, so this class has no
@@ -151,12 +149,8 @@ EasynavNavigationActionServer::EasynavNavigationActionServer(
 
 EasynavNavigationActionServer::~EasynavNavigationActionServer()
 {
-  if (executor_) {
-    executor_->cancel();
-  }
-  if (spin_thread_.joinable()) {
-    spin_thread_.join();
-  }
+  // on_execute() uses executor_ and gm_client_: stop it first.
+  stop();
 }
 
 rclcpp_action::GoalResponse EasynavNavigationActionServer::on_goal_received(
@@ -201,9 +195,13 @@ void EasynavNavigationActionServer::on_execute(const GoalHandleSharedPtr goal_ha
   rclcpp::Rate rate(tick_rate_hz_);
   BT::NodeStatus status = BT::NodeStatus::RUNNING;
 
+  // Process what EasyNav sent since the last goal before the tree looks at it.
+  executor_->spin_some();
+
   while (status == BT::NodeStatus::RUNNING) {
+    executor_->spin_some();
     if (goal_handle->is_canceling()) {
-      gm_client_->cancel();
+      cancel_and_wait();
       auto result = std::make_shared<Result>();
       result->error_code = Result::CANCELED;
       result->error_msg = "Navigation canceled by client.";
@@ -221,7 +219,7 @@ void EasynavNavigationActionServer::on_execute(const GoalHandleSharedPtr goal_ha
       return;
     }
     if (is_shutdown_requested()) {
-      gm_client_->cancel();
+      cancel_and_wait();
       auto result = std::make_shared<Result>();
       result->error_code = Result::ABORTED;
       result->error_msg = "Navigation capability is shutting down.";
@@ -250,6 +248,24 @@ void EasynavNavigationActionServer::on_execute(const GoalHandleSharedPtr goal_ha
     result->error_code = Result::ABORTED;
     result->error_msg = "Navigation behavior tree did not succeed.";
     goal_handle->abort(result);
+  }
+}
+
+void EasynavNavigationActionServer::cancel_and_wait()
+{
+  // Let EasyNav's answer (CANCELLED) be processed now: otherwise it stays
+  // queued until the next goal, whose send it would then confuse.
+  using State = easynav::GoalManagerClient::State;
+  gm_client_->cancel();
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+  while (std::chrono::steady_clock::now() < deadline) {
+    executor_->spin_some(std::chrono::milliseconds(10));
+    const auto state = gm_client_->get_state();
+    if (state != State::ACCEPTED_AND_NAVIGATING && state != State::SENT_GOAL &&
+      state != State::SENT_PREEMPT)
+    {
+      return;
+    }
   }
 }
 

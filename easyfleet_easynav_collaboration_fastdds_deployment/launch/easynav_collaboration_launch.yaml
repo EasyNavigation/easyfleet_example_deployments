@@ -1,0 +1,118 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This deployment's top-level launch file: two real-EasyNav-navigating
+# robots plus mission control.
+#   - robot_1: navigation (real EasyNav), perception (mock)
+#   - robot_2: navigation (real EasyNav), manipulation (mock)
+# Each robot is namespaced independently (see the per-robot launch files),
+# so their capabilities never collide and can also be brought up on their
+# own (e.g. `ros2 launch easyfleet_easynav_collaboration_fastdds_deployment robot_1_launch.yaml`).
+#
+# Does NOT launch Gazebo -- start
+# `ros2 launch easyfleet_easynav_collaboration_fastdds_deployment simulation_launch.yaml`
+# separately first, so both robots are already spawned (namespaced
+# "robot_1"/"robot_2") and publishing
+# scan_raw/odom/TF before system_main tries to localize against them.
+#
+# easynav_collaboration_mission_node is delayed a few seconds so both
+# robots have finished activating (and published their /capabilities
+# announcements) before mission control's discovery window (see
+# easyfleet_mission_manager::discover_capabilities()) opens -- launching
+# everything at literally the same instant risks discovering nothing.
+#
+# FastDDS multi-domain: this is the launcher for the "central island" too
+# (see fastdds.md) -- unlike the Zenoh-island sibling deployment, the
+# central island needs no router/bridge process of its own: it's just plain
+# ROS_DOMAIN_ID=0, and robot_1_launch.yaml/robot_2_launch.yaml each start and
+# connect to their OWN DDS Router bridge in turn (see those files), which is
+# the thing that straddles domain 0 and each robot's own domain -- robot_1
+# and robot_2 never connect directly to each other. No allowlist needed on
+# this side: each robot bridge's own config/robot_N/dds_router.yaml already
+# enforces, per-topic, that only its documented boundary contract crosses.
+launch:
+  - arg: {name: "robot_rviz", default: "false", description: "Also open each robot's own rviz2"}
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_fastrtps_cpp"}
+  - timer:
+      period: 2.0
+      children:
+        - include:
+            file: "$(find-pkg-share easyfleet_easynav_collaboration_fastdds_deployment)/launch/robot_1_launch.yaml"
+            arg:
+              - {name: "rviz", value: "$(var robot_rviz)"}
+        - include:
+            file: "$(find-pkg-share easyfleet_easynav_collaboration_fastdds_deployment)/launch/robot_2_launch.yaml"
+            arg:
+              - {name: "rviz", value: "$(var robot_rviz)"}
+
+        # Fleet-wide navigation manager: publishes the same map/routes both
+        # robots above would otherwise load locally on /global_map and
+        # /global_routes (see robot_1_launch.yaml/robot_2_launch.yaml's
+        # "incoming_map"/"incoming_routes" remaps on system_main).
+        - node:
+            pkg: "easyfleet_navigation_manager"
+            exec: "navigation_manager_node"
+            output: "screen"
+            env:
+              - name: "ROS_DOMAIN_ID"
+                value: "0"
+            param:
+              - name: "use_sim_time"
+                value: true
+              - from: "$(find-pkg-share easyfleet_easynav_collaboration_fastdds_deployment)/config/navigation_manager.params.yaml"
+
+        # Fleet-wide view: navigation_manager_node's own topics
+        # (/global_map, /global_routes_markers, /global_routes_imarkers/...)
+        # are all unnamespaced, so this rviz2 needs no remap -- unlike
+        # robot_1_launch.yaml/robot_2_launch.yaml's own rviz2, which is
+        # per-robot-namespaced.
+        - node:
+            pkg: "rviz2"
+            exec: "rviz2"
+            output: "screen"
+            env:
+              - name: "ROS_DOMAIN_ID"
+                value: "0"
+            args: "-d $(find-pkg-share easyfleet_easynav_deployment)/rviz/navigation_manager.rviz"
+            param:
+              - name: "use_sim_time"
+                value: true
+
+        # 40s: NOT a DDS Router discovery margin (a nested-timer wall-clock
+        # test confirmed a 15s delay here really was elapsing in real time)
+        # -- it's EasyNav's own AMCL/costmap stack taking far longer than
+        # its 0.2s target cycle time to complete its FIRST cycle on this
+        # sandbox's CPU-bound hardware (2 full navigation stacks + 2 Gazebo
+        # robots + software-rendered EGL + DDS Router bridges, all on one
+        # machine). Confirmed empirically (fastdds.md, 2026-08-29): both
+        # robots' localizer_node logged "[costmap] target cycle time
+        # exceeded by more than 1.5x (22.3s / 22.6s > 0.200 s)" for their
+        # first cycle -- so a 15s margin still wasn't enough, symmetrically
+        # for both robots, regardless of which one's capability mission
+        # control happens to check first. This affects any RMW/bridge
+        # strategy identically; it's not specific to FastDDS/DDS Router.
+        - timer:
+            period: 40.0
+            children:
+              - node:
+                  pkg: "easyfleet_easynav_collaboration_fastdds_deployment"
+                  exec: "easynav_collaboration_mission_node"
+                  output: "screen"
+                  env:
+                    - name: "ROS_DOMAIN_ID"
+                      value: "0"
+                  param:
+                    - name: "use_sim_time"
+                      value: true

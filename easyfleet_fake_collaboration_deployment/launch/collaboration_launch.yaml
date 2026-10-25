@@ -28,6 +28,12 @@
 # easyfleet_mission_manager::discover_capabilities()) opens -- launching
 # everything at literally the same instant risks discovering nothing.
 launch:
+  # Zenoh by default. The router is started here; when a robot_N_launch.yaml
+  # is run on its own instead, start one first (ros2 run rmw_zenoh_cpp rmw_zenohd).
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+  - executable:
+      cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
+      output: "screen"
   - include:
       file: "$(find-pkg-share easyfleet_fake_collaboration_deployment)/launch/robot_1_launch.yaml"
   - include:

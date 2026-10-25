@@ -1,0 +1,312 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# GPS-localized, NavMap-mapped, no-distance-sensor EasyNav configuration for
+# a Summit robot spawned under the "robot_1" namespace (see
+# easynav_playground_summit/launch/playground_monorobot_summit.launch.py).
+# Adapted from easynav_fusion_localizer/config/example_params_summit_dual_gazebo.yaml
+# (already tuned for Summit):
+#  - localizer_node: kept as-is except latitude_origin/longitude_origin/
+#    altitude_origin, fixed to match src/granja_leon/worlds/granja_leon.world's
+#    own <spherical_coordinates> (42.630258, -5.551252, 842.3611450195312) --
+#    the example's own origin (~40.28, -3.82) is a different location, and
+#    must match the world's GPS anchor or the GPS->local-XY conversion this
+#    plugin does internally would be offset from where system_main's map
+#    frame actually is.
+#  - maps_manager_node: swapped from costmap+routes to navmap (routes are
+#    explicitly deferred to later), pointing at the granja_leon package's
+#    already-generated maps/granja_leon.navmap.
+#  - planner_node: swapped from CostmapPlanner to easynav_navmap_planner's
+#    AStarPlanner (the NavMap-paired planner; naming convention matches
+#    easynav_indoor_testcase/robots_params/navmap.kobuki.params.yaml's own
+#    "planner_types: [simple]" block). No obstacles/inflated_obstacles NavMap
+#    layer exists (no distance sensor to populate one, by design), so
+#    AStarPlanner falls back to FREE_SPACE for every NavCel and degrades to
+#    pure geometric shortest-path -- verified against navmap_core's
+#    layer_get() default-on-missing-layer behavior.
+#  - sensors_node: "laser1" dropped entirely -- GPS + IMU + wheel odometry
+#    only, no distance/range sensor.
+#  - controller_node: RegulatedPurePursuitController.
+#  - Sensor topics are absolute: the Summit from easynav_playground_summit is
+#    not namespaced (/gps/fix, /imu/data, /robotnik_base_control/odom, /tf),
+#    while system_main runs under "robot_1" (see launch/robot_1_launch.yaml).
+/**/localizer_node:
+  ros__parameters:
+    use_sim_time: true
+    localizer_types: [Ukf]
+    dummy:
+      rt_freq: 30.0
+      plugin: easynav_localizer/DummyLocalizer
+      cycle_time_nort: 0.01
+      cycle_time_rt: 0.001
+    Ukf:
+      rt_freq: 50.0
+      freq: 5.0
+      reseed_freq: 0.1
+      plugin: easynav_fusion_localizer/FusionLocalizer
+      latitude_origin: 42.630258
+      longitude_origin: -5.551252
+      altitude_origin: 842.3611450195312
+      local_filter:
+        two_d_mode: true
+        publish_tf: false
+
+        # --- Reference Frames ---
+        map_frame: map
+        odom_frame: odom
+        base_link_frame: base_link
+        world_frame: odom
+
+        dynamic_process_noise_covariance: true
+
+        #--- INPUT: Wheel Odometry ---
+        odom0: /robotnik_base_control/odom
+        odom0_config:
+          [true,  true, false,
+          false, false, true,
+          true,  true, false,
+          false, false, true,
+          false, false, false]
+        odom0_differential: false
+
+        # --- Process Variances ---
+        process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.06, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.02, 0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.015]
+      global_filter:
+        two_d_mode: true
+        publish_tf: true
+        debug: false
+        # transform_timeout is no longer a valid parameter here: ukf_wrapper.cpp
+        # now hardcodes it to zero (see UkfWrapper::loadParams()) so a config
+        # value can never make the real-time thread block on a TF lookup again.
+        smooth_lagged_data: true
+        dynamic_process_noise_covariance: true
+
+        # State the filter assumes before its first correction (map frame:
+        # [X, Y, Z, roll, pitch, yaw, Vx, Vy, Vz, Vroll, Vpitch, Vyaw, Ax, Ay, Az]).
+        # Matches the robot's Gazebo spawn pose (see
+        # easynav_playground_summit/launch/playground_monorobot_summit.launch.py)
+        # so map->odom is correct from the very first cycle instead of
+        # starting at (0,0,0) and jumping once the first GPS fix lands.
+        initial_state: [29.406, 5.22624, -0.427925, 0.0, 0.0, -0.527741,
+                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        # --- Reference Frames ---
+        map_frame: map
+        odom_frame: odom
+        base_link_frame: base_link
+        world_frame: map
+
+        # --- INPUT 1: GPS ---
+        gps0: /gps/fix
+        gps0_config:
+          [true,  true,  false,
+          false, false, false,
+          false, false, false,
+          false, false, false,
+          false, false, false]
+        gps0_differential: false
+
+        # --- INPUT 2: Wheel Odometry ---
+        odom0: /robotnik_base_control/odom
+        odom0_config:
+          [false, false, false,
+          false, false, false,
+          true,  true,  false,
+          false, false, true,
+          false, false, false]
+        odom0_differential: false
+
+        # --- INPUT 3: IMU ---
+        imu0: /imu/data
+        imu0_config:
+          [false, false, false,
+          false, false, false,
+          false, false, false,
+          false, false, true,
+          false, false, false]
+        imu0_differential: false
+        imu0_remove_gravitational_acceleration: true
+
+        # --- Process Variances ---
+        process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.06, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.02, 0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.015]
+
+        initial_estimate_covariance: [
+          5.0, 5.0, 1e-3,   1e-3, 1e-3, 1.0,
+          0.5,  0.5,  1e-3,   1e-3, 1e-3, 0.1,
+          0.1,  0.1,  0.1
+        ]
+
+/**/maps_manager_node:
+  ros__parameters:
+    use_sim_time: true
+    map_types: [navmap, navmap_routes]
+    navmap:
+      freq: 10.0
+      plugin: easynav_navmap_maps_manager/NavMapMapsManager
+      package: granja_leon
+      navmap_path_file: maps/granja_leon.navmap
+      # No filters: ObstaclesFilter needs point-cloud "points" perceptions,
+      # which this deployment deliberately has none of (GPS-only, no
+      # distance/range sensor) -- with it configured, it logged "There are
+      # no points perceptions" every cycle and appeared to block the
+      # NavMap itself from ever being published.
+    # Second maps manager, run after "navmap" above so RoutesNavMapFilter's
+    # own filter chain sees that manager's already-populated shared
+    # "navigation" layer (obstacles/inflation) before adding route costs on
+    # top of it -- see easynav_navmap_routes_maps_manager's README.
+    navmap_routes:
+      freq: 10.0
+      plugin: easynav_navmap_routes_maps_manager/NavMapRoutesMapsManager
+      # No package/map_path_file: falls back to the manager's own single
+      # default segment ((0,0,0) -> (1,0,0)); edit routes live via RViz's
+      # interactive markers (or the /.../save_routes service once real
+      # farm routes are drawn) rather than a placeholder YAML.
+      filters: [routes_navmap]
+      routes_navmap:
+        plugin: easynav_navmap_routes_maps_manager/RoutesNavMapFilter
+        min_cost: 200
+        route_width: 1.0
+    dummy:
+      freq: 10.0
+      plugin: easynav_maps_manager/DummyMapsManager
+      cycle_time_nort: 0.1
+      cycle_time_rt: 0.0001
+
+/**/planner_node:
+  ros__parameters:
+    use_sim_time: true
+    planner_types: [simple]
+    dummy:
+      freq: 1.0
+      plugin: easynav_planner/DummyPlanner
+      cycle_time_nort: 0.2
+      cycle_time_rt: 0.0001
+    simple:
+      freq: 0.5
+      plugin: easynav_navmap_planner/AStarPlanner
+      cost_factor: 10.0
+      continuous_replan: true
+
+/**/controller_node:
+  ros__parameters:
+    use_sim_time: true
+    colision_checker:
+      active: true
+      debug_markers: true
+      downsample_leaf_size: 0.05
+      robot_radius: 0.30
+      brake_acc: 1.0
+      safety_margin: 0.05
+    controller_types: [rpp]
+    rpp:
+      rt_freq: 30.0
+      plugin: easynav_regulated_pp_controller/RegulatedPurePursuitController
+      # Velocity / acceleration limits for the Summit XL (outdoor base, much
+      # larger/faster than the indoor Kobuki these were copied from) --
+      # matches the envelope the localizer's own
+      # dynamic_process_noise_covariance already assumes for this robot (see
+      # max_linear_velocity/max_angular_velocity in
+      # easynav_fusion_localizer/config/example_params_summit_dual_gazebo.yaml).
+      max_linear_vel: 1.5
+      min_linear_vel: -0.5
+      max_angular_vel: 1.0
+      min_angular_vel: -1.0
+      max_linear_accel: 0.8
+      max_linear_decel: 0.8
+      max_angular_accel: 1.0
+      max_angular_decel: 1.0
+      use_dynamic_window: false
+      allow_reversing: false
+      # Lookahead
+      lookahead_dist: 0.5
+      min_lookahead_dist: 0.3
+      max_lookahead_dist: 0.9
+      lookahead_time: 1.2
+      use_velocity_scaled_lookahead_dist: true
+      # Rotate to heading
+      use_rotate_to_heading: true
+      rotate_to_heading_angular_vel: 1.0
+      rotate_to_heading_min_angle: 0.785
+      # Curvature regulation
+      use_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.9
+      regulated_linear_scaling_min_speed: 0.15
+      use_fixed_curvature_lookahead: false
+      curvature_lookahead_dist: 1.0
+      interpolate_curvature_after_goal: false
+      # Obstacle-proximity regulation (EasyNav's point-cloud based equivalent of Nav2's cost-based term)
+      use_obstacle_regulated_linear_velocity_scaling: true
+      obstacle_scaling_dist: 0.4
+      obstacle_scaling_gain: 0.8
+      # Approach to goal
+      min_approach_linear_velocity: 0.05
+      approach_velocity_scaling_dist: 0.6
+      # Goal tolerances (matching the serest config: 0.1 m / 6 deg)
+      xy_goal_tolerance: 0.1
+      yaw_goal_tolerance: 0.105
+
+/**/sensors_node:
+  ros__parameters:
+    use_sim_time: true
+    forget_time: 0.5
+    sensors: [gps, imu]
+    perception_default_frame: odom
+    imu:
+      topic: /imu/data
+      type: sensor_msgs/msg/Imu
+    gps:
+      topic: /gps/fix
+      type: sensor_msgs/msg/NavSatFix
+      # Required: FusionLocalizer::update_rt() looks up GPS perceptions via
+      # nav_state.has_group("gnss")/get_group<GNSSPerception>("gnss")
+      # specifically -- without this, the sensor registers under the empty
+      # default group and GPS is silently never fused into the global
+      # filter (it just free-runs on odom/IMU velocity dead-reckoning,
+      # drifting away from the true, GPS-confirmed position).
+      group: gnss
+
+/**/system_node:
+  ros__parameters:
+    use_sim_time: true
+    position_tolerance: 0.75
+    angle_tolerance: 0.25

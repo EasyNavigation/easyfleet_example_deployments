@@ -18,6 +18,7 @@ Web: [https://easynavigation.github.io/easyfleet_web/](https://easynavigation.gi
 | [**easyfleet_easynav_collaboration_simple_api_deployment_py**](easyfleet_easynav_collaboration_simple_api_deployment_py) | Python version of the simple API scenario. |
 | [**easyfleet_easynav_collaboration_zenoh_deployment**](easyfleet_easynav_collaboration_zenoh_deployment) | The simple API scenario over `rmw_zenoh`, one Zenoh island per robot plus a central one. |
 | [**easyfleet_easynav_collaboration_fastdds_deployment**](easyfleet_easynav_collaboration_fastdds_deployment) | The simple API scenario over Fast DDS, isolated per robot with DDS Router. |
+| [**easyfleet_plansys2_warehouse_deployment**](easyfleet_plansys2_warehouse_deployment) | Four Kobukis in a large warehouse, driven by PlanSys2: the behavior tree of each plan action calls the robots' capabilities. |
 | [**easyfleet_easynav_farm_deployment**](easyfleet_easynav_farm_deployment) | One Summit robot navigating outdoors on a NavMap, localized with GPS. |
 
 ## Build

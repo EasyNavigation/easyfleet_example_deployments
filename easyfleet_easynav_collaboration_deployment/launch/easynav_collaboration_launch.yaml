@@ -22,9 +22,9 @@
 # own (e.g. `ros2 launch easyfleet_easynav_collaboration_deployment robot_1_launch.yaml`).
 #
 # Does NOT launch Gazebo -- start
-# `ros2 launch easynav_playground_kobuki playgorund_multirobot_kobuki.launch.py`
+# `ros2 launch easyfleet_easynav_collaboration_deployment simulation_launch.yaml`
 # separately first, so both robots are already spawned (namespaced
-# "robot_1"/"robot_2", see multirobot_config.yaml) and publishing
+# "robot_1"/"robot_2") and publishing
 # scan_raw/odom/TF before system_main tries to localize against them.
 #
 # easynav_collaboration_mission_node is delayed a few seconds so both
@@ -33,10 +33,36 @@
 # easyfleet_mission_manager::discover_capabilities()) opens -- launching
 # everything at literally the same instant risks discovering nothing.
 launch:
+  - arg: {name: "robot_rviz", default: "false", description: "Also open each robot's own rviz2"}
+  - arg: {name: "mission", default: "true", description: "Run the example mission"}
+  - arg: {name: "robot_1_easynav_params", default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/robot_1/easynav_system.costmap_rpp.params.yaml"}
+  - arg: {name: "robot_2_easynav_params", default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/robot_2/easynav_system.costmap_rpp.params.yaml"}
+  - arg: {name: "navigation_params", default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/navigation_params.yaml"}
+  - arg: {name: "navigation_manager_params", default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/navigation_manager.params.yaml"}
+  # Zenoh by default; needs the router started by simulation_launch.yaml.
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - include:
       file: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/launch/robot_1_launch.yaml"
+      arg:
+        - {name: "rviz", value: "$(var robot_rviz)"}
+        - {name: "easynav_params", value: "$(var robot_1_easynav_params)"}
+        - {name: "navigation_params", value: "$(var navigation_params)"}
   - include:
       file: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/launch/robot_2_launch.yaml"
+      arg:
+        - {name: "rviz", value: "$(var robot_rviz)"}
+        - {name: "easynav_params", value: "$(var robot_2_easynav_params)"}
+        - {name: "navigation_params", value: "$(var navigation_params)"}
+  # Fleet view: global map and routes, each robot's base_link and path.
+  - node:
+      pkg: "rviz2"
+      exec: "rviz2"
+      name: "central_rviz"
+      output: "screen"
+      args: "-d $(find-pkg-share easyfleet_easynav_deployment)/rviz/navigation_manager.rviz"
+      param:
+        - name: "use_sim_time"
+          value: true
 
   # Fleet-wide navigation manager: publishes the same map/routes both
   # robots above would otherwise load locally on /global_map and
@@ -49,9 +75,10 @@ launch:
       param:
         - name: "use_sim_time"
           value: true
-        - from: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/navigation_manager.params.yaml"
+        - from: "$(var navigation_manager_params)"
 
   - timer:
+      if: "$(var mission)"
       period: 5.0
       children:
         - node:

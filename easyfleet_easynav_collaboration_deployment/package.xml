@@ -13,11 +13,10 @@
     manipulation (own copies of the PerceptionFakeCapability/
     ManipulationFakeCapability reference implementations, mirroring
     easyfleet_fake_collaboration_deployment's own duplication of these
-    classes rather than sharing them). Both robots run against the same
-    Gazebo world/map (easynav_playground_kobuki's
-    playgorund_multirobot_kobuki.launch.py + src/easynav_indoor_testcase's
-    home2 map), each namespaced to match its actual spawn namespace and
-    initial pose. Also ships the example mission script built on
+    classes rather than sharing them). Both robots run in the same Gazebo
+    world (launch/simulation_launch.yaml, from easynav_playgrounds' small
+    house) on the home2 map, each under its own namespace, with its own TF
+    tree, at its initial pose. Uses rmw_zenoh_cpp by default. Also ships the example mission script built on
     easyfleet_mission_manager and the launch files and JSON/parameter
     configuration each robot is started with.
 
@@ -48,6 +47,15 @@
   <exec_depend>easyfleet_easynav_navigation</exec_depend>
   <exec_depend>easyfleet_navigation_manager</exec_depend>
   <exec_depend>easynav_system</exec_depend>
+  <exec_depend>easynav_costmap_localizer</exec_depend>
+  <exec_depend>easynav_costmap_maps_manager</exec_depend>
+  <exec_depend>easynav_costmap_planner</exec_depend>
+  <exec_depend>easynav_regulated_pp_controller</exec_depend>
+  <exec_depend>easynav_routes_maps_manager</exec_depend>
+  <exec_depend>easynav_playground_kobuki_worlds</exec_depend>
+  <exec_depend>large_warehouse_world</exec_depend>
+  <exec_depend>rmw_zenoh_cpp</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

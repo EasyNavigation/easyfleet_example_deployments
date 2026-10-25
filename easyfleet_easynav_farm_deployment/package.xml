@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>easyfleet_easynav_farm_deployment</name>
+  <version>0.1.0</version>
+  <description>
+    Single-robot deployment scenario: a Summit XL on a farm (the granja_leon
+    world), whose EasyFleet/EasyNav nodes run under "robot_1", with a real
+    EasyNav navigation stack (easynav_system system_main +
+    easyfleet_easynav_deployment's navigation capability, reused as-is)
+    localized via GPS (easynav_fusion_localizer/FusionLocalizer, fusing GPS +
+    wheel odometry + IMU -- no distance/range sensor) against a NavMap
+    (easynav_navmap_maps_manager/NavMapMapsManager, granja_leon.navmap), with
+    a second maps manager (easynav_navmap_routes_maps_manager) overlaying
+    preferred routes on top of it. launch/simulation_launch.yaml starts the
+    Summit from easynav_playground_summit_worlds in that world. Uses
+    rmw_zenoh_cpp by default. Pure launch/config package -- no C++ of its own.
+  </description>
+  <maintainer email="fmrico@gmail.com">Francisco Martín Rico</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>launch_yaml</exec_depend>
+  <exec_depend>easynav_system</exec_depend>
+  <exec_depend>easyfleet_easynav_deployment</exec_depend>
+  <exec_depend>easyfleet_easynav_navigation</exec_depend>
+  <exec_depend>easynav_fusion_localizer</exec_depend>
+  <exec_depend>easynav_navmap_maps_manager</exec_depend>
+  <exec_depend>easynav_navmap_routes_maps_manager</exec_depend>
+  <exec_depend>easynav_navmap_planner</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>navmap_rviz_plugin</exec_depend>
+  <exec_depend>granja_leon</exec_depend>
+
+  <exec_depend>easynav_regulated_pp_controller</exec_depend>
+  <exec_depend>easynav_playground_summit_worlds</exec_depend>
+  <exec_depend>rmw_zenoh_cpp</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,6 @@
+<!-- (drop ?r ?p ?l): the robot's manipulation capability places the package. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <CallManipulation robot="{arg0}" named_task="place" server_timeout="10.0"/>
+  </BehaviorTree>
+</root>

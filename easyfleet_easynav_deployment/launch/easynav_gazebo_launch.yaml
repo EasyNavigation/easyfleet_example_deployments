@@ -29,19 +29,37 @@
 #
 # robot_namespace forwards to easynav_robot_gazebo_launch.yaml's own
 # argument of the same name (default "", unnamespaced, for a single real
-# robot); pass robot_namespace:="robot_1" to match
-# easynav_playground_kobuki's playground_monorobot_kobuki.launch.py.
+# robot, and simulation_launch.yaml's unnamespaced Kobuki).
 launch:
+  # Zenoh by default; needs the router started by simulation_launch.yaml.
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - arg:
       name: "robot_namespace"
       default: ""
       description: "Namespace the robot is pushed under. Empty (default) for a single unnamespaced real robot/Gazebo instance."
+  - arg:
+      name: "easynav_params"
+      default: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/easynav_system.costmap_rpp.params.yaml"
+      description: "EasyNav (system_main) parameters file"
+  - arg:
+      name: "navigation_params"
+      default: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/navigation_params.yaml"
+      description: "Navigation capability parameters file (waypoints)"
+  - arg:
+      name: "navigation_manager_params"
+      default: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/navigation_manager.params.yaml"
+      description: "navigation_manager parameters file (fleet map and routes)"
+  - arg: {name: "mission", default: "true", description: "Run the mission (easynav_mission_node)"}
 
   - include:
       file: "$(find-pkg-share easyfleet_easynav_deployment)/launch/easynav_robot_gazebo_launch.yaml"
       arg:
         - name: "robot_namespace"
           value: "$(var robot_namespace)"
+        - name: "easynav_params"
+          value: "$(var easynav_params)"
+        - name: "navigation_params"
+          value: "$(var navigation_params)"
 
   # Fleet-wide navigation manager: publishes the same map/routes the robot
   # above would otherwise load locally on /global_map and /global_routes
@@ -54,9 +72,10 @@ launch:
       exec: "navigation_manager_node"
       output: "screen"
       param:
-        - from: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/navigation_manager.params.yaml"
+        - from: "$(var navigation_manager_params)"
 
   - timer:
+      if: "$(var mission)"
       period: 3.0
       children:
         - node:

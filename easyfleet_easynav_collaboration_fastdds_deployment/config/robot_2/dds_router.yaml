@@ -1,0 +1,85 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# robot_2's DDS Router bridge: connects robot_2's own ROS_DOMAIN_ID (2) with
+# the central island's (0). See config/robot_1/dds_router.yaml for the full
+# rationale behind every choice here (identical except for the domain ID,
+# the "robot_1"->"robot_2" namespace, and "perception"->"manipulation") and
+# fastdds.md for the design discussion and empirical findings.
+participants:
+  - name: robot_domain
+    kind: local
+    domain: 2
+
+  - name: central_domain
+    kind: local
+    domain: 0
+
+allowlist:
+  - name: "*capabilities"
+  - name: "*capabilities_status"
+  - name: "*global_map"
+  - name: "*global_routes"
+  - name: "*clock"
+  - name: "*mission_status_markers"
+  - name: "*robot_2/navigation*"
+  - name: "*robot_2/manipulation*"
+  - name: "*robot_2/planner_node*"
+  - name: "*robot_2/easynav_control*"
+  - name: "rt/robot_2/tf"
+  - name: "rt/robot_2/tf_static"
+
+topics:
+  - name: "*capabilities"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*global_map"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*global_routes"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*robot_2/navigation*"
+    qos:
+      durability: true
+      reliability: true
+  - name: "*robot_2/manipulation*"
+    qos:
+      durability: true
+      reliability: true
+  - name: "rt/robot_2/tf_static"
+    qos:
+      durability: true
+      reliability: true
+
+topic-routes:
+  - name: "rt/robot_2/tf"
+    type: "tf2_msgs::msg::dds_::TFMessage_"
+    routes:
+      - src: robot_domain
+        dst:
+          - central_domain
+      - src: central_domain
+
+  - name: "rt/robot_2/tf_static"
+    type: "tf2_msgs::msg::dds_::TFMessage_"
+    routes:
+      - src: robot_domain
+        dst:
+          - central_domain
+      - src: central_domain

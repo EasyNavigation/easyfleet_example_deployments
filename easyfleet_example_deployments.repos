@@ -19,14 +19,31 @@ repositories:
     type: git
     url: https://github.com/fmrico/yaets.git
     version: rolling
-  easynav_playground_kobuki:
+  easynav_playgrounds:
     type: git
-    url: https://github.com/EasyNavigation/easynav_playground_kobuki.git
+    url: https://github.com/EasyNavigation/easynav_playgrounds.git
     version: rolling
-  easynav_playground_summit:
+  large_warehouse_world:
     type: git
-    url: https://github.com/EasyNavigation/easynav_playground_summit.git
+    url: https://github.com/juanscelyg/large_warehouse_world.git
+    version: main
+  # PlanSys2 with Kairos, for easyfleet_plansys2_warehouse_deployment.
+  ros2_planning_system:
+    type: git
+    url: https://github.com/PlanSys2/ros2_planning_system.git
     version: rolling
+  kairos:
+    type: git
+    url: https://github.com/PlanSys2/kairos.git
+    version: main
+  popf:
+    type: git
+    url: https://github.com/fmrico/popf.git
+    version: rolling-devel
+  cascade_lifecycle:
+    type: git
+    url: https://github.com/fmrico/cascade_lifecycle.git
+    version: rolling-devel
   # No released .deb for rolling (needed by easynav_fusion_localizer).
   robot_localization:
     type: git

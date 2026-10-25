@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>easyfleet_plansys2_warehouse_deployment</name>
+  <version>0.1.0</version>
+  <description>
+    Four Kobukis in Warehouse A of large_warehouse_world, driven by PlanSys2:
+    scouts locate packages in the rack bays (perception), carriers take them
+    to the docks (manipulation). The controller builds the PDDL problem from
+    the capabilities the robots announce, and the behavior tree of each
+    action calls them (easyfleet_bt_nodes). Navigation is real EasyNav;
+    perception and manipulation are mocks.
+  </description>
+  <maintainer email="fmrico@gmail.com">Francisco Martín Rico</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>easyfleet_mission_manager</depend>
+  <depend>plansys2_domain_expert</depend>
+  <depend>plansys2_executor</depend>
+  <depend>plansys2_msgs</depend>
+  <depend>plansys2_planner</depend>
+  <depend>plansys2_problem_expert</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>launch_yaml</exec_depend>
+  <exec_depend>easyfleet_bt_nodes</exec_depend>
+  <exec_depend>easyfleet_easynav_collaboration_deployment</exec_depend>
+  <exec_depend>easyfleet_easynav_deployment</exec_depend>
+  <exec_depend>easyfleet_navigation_manager</exec_depend>
+  <exec_depend>easynav_system</exec_depend>
+  <exec_depend>easynav_playground_kobuki_worlds</exec_depend>
+  <exec_depend>large_warehouse_world</exec_depend>
+  <exec_depend>plansys2_bringup</exec_depend>
+  <exec_depend>plansys2_bt_actions</exec_depend>
+  <exec_depend>plansys2_kairos_plan_solver</exec_depend>
+  <exec_depend>rmw_zenoh_cpp</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

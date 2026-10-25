@@ -47,6 +47,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -95,6 +96,32 @@ Navigation::Goal make_easynav_goal(const std::string & waypoint_id)
   Navigation::Goal goal;
   goal.parameters_json = R"({"goal_id": ")" + waypoint_id + R"("})";
   return goal;
+}
+
+using NavigationResponse = easyfleet_core::CapabilityClient<Navigation>::Response;
+
+/// Empty if the goal succeeded, else e.g. 'robot_1 did not reach "kitchen" (CANCELED)'.
+std::string missed(
+  const std::string & robot, const std::string & waypoint, const NavigationResponse & response)
+{
+  if (response.outcome == easyfleet_core::CapabilityClient<Navigation>::Outcome::SUCCEEDED) {
+    return "";
+  }
+  return robot + " did not reach \"" + waypoint + "\" (" + outcome_to_string(response.outcome) +
+         ")";
+}
+
+/// The end of a phase: `done` if no robot missed its waypoint, else which did.
+std::string phase_end(
+  const std::string & phase, const std::string & done, const std::vector<std::string> & misses)
+{
+  std::string failed;
+  for (const auto & miss : misses) {
+    if (!miss.empty()) {
+      failed += (failed.empty() ? "" : "; ") + miss;
+    }
+  }
+  return phase + " done: " + (failed.empty() ? done : failed + ".");
 }
 
 }  // namespace
@@ -187,24 +214,27 @@ int main(int argc, char ** argv)
     print_step("[" + kRobot1 + "/perception] not active, skipping.");
   }
 
+  std::string miss1, miss2;
   {
     std::thread robot1_thread;
     if (robot1_navigation_client) {
       robot1_thread = std::thread(
         [&] {
-          run_capability<Navigation>(
-            robot1_navigation_client, robot1_navigation->get().action_name,
-            make_easynav_goal(kKitchen), kLongTimeout,
-            make_navigation_feedback_printer(robot1_navigation->get().action_name));
+          miss1 = missed(
+            kRobot1, kKitchen, run_capability<Navigation>(
+              robot1_navigation_client, robot1_navigation->get().action_name,
+              make_easynav_goal(kKitchen), kLongTimeout,
+              make_navigation_feedback_printer(robot1_navigation->get().action_name)));
         });
     } else {
       print_step("[" + kRobot1 + "/navigation] not active, skipping.");
     }
     if (robot2_navigation_client) {
       status.set_status(kRobot2, "Navigating -> " + kDock);
-      run_capability<Navigation>(
-        robot2_navigation_client, robot2_navigation->get().action_name, make_easynav_goal(kDock),
-        kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name));
+      miss2 = missed(
+        kRobot2, kDock, run_capability<Navigation>(
+          robot2_navigation_client, robot2_navigation->get().action_name, make_easynav_goal(kDock),
+          kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name)));
     } else {
       print_step("[" + kRobot2 + "/navigation] not active, skipping.");
     }
@@ -212,10 +242,12 @@ int main(int argc, char ** argv)
       robot1_thread.join();
     }
   }
-  print_step("Phase 1 done: both robots reached their waypoint.");
+  print_step(phase_end("Phase 1", "both robots reached their waypoint.", {miss1, miss2}));
 
   // Phase 2: robot_1 -> "kitchen_standby" (still perceiving) while robot_2
   // -> "kitchen", simultaneously.
+  miss1.clear();
+  miss2.clear();
   print_section(
     "Phase 2: " + kRobot1 + " -> \"" + kKitchenStandby + "\" (clearing space, still perceiving), " +
       kRobot2 + " -> \"" + kKitchen + "\" (simultaneously)");
@@ -228,19 +260,22 @@ int main(int argc, char ** argv)
         (robot1_perception_thread.joinable() ? "\nPerceiving" : ""));
       robot1_thread = std::thread(
         [&] {
-          run_capability<Navigation>(
-            robot1_navigation_client, robot1_navigation->get().action_name,
-            make_easynav_goal(kKitchenStandby), kLongTimeout,
-            make_navigation_feedback_printer(robot1_navigation->get().action_name));
+          miss1 = missed(
+            kRobot1, kKitchenStandby, run_capability<Navigation>(
+              robot1_navigation_client, robot1_navigation->get().action_name,
+              make_easynav_goal(kKitchenStandby), kLongTimeout,
+              make_navigation_feedback_printer(robot1_navigation->get().action_name)));
         });
     } else {
       print_step("[" + kRobot1 + "/navigation] not active, skipping.");
     }
     if (robot2_navigation_client) {
       status.set_status(kRobot2, "Navigating -> " + kKitchen);
-      run_capability<Navigation>(
-        robot2_navigation_client, robot2_navigation->get().action_name, make_easynav_goal(kKitchen),
-        kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name));
+      miss2 = missed(
+        kRobot2, kKitchen, run_capability<Navigation>(
+          robot2_navigation_client, robot2_navigation->get().action_name,
+          make_easynav_goal(kKitchen), kLongTimeout,
+          make_navigation_feedback_printer(robot2_navigation->get().action_name)));
     } else {
       print_step("[" + kRobot2 + "/navigation] not active, skipping.");
     }
@@ -248,7 +283,10 @@ int main(int argc, char ** argv)
       robot1_thread.join();
     }
   }
-  print_step("Phase 2 done: " + kRobot1 + " clear of \"" + kKitchen + "\", " + kRobot2 + " there.");
+  print_step(
+    phase_end(
+      "Phase 2", kRobot1 + " clear of \"" + kKitchen + "\", " + kRobot2 + " there.",
+      {miss1, miss2}));
 
   // robot_1's perception has done its job (giving robot_2 room to work at
   // "kitchen") -- stop it now.
@@ -279,6 +317,8 @@ int main(int argc, char ** argv)
   // simultaneously; 10s into robot_1's navigation it is explicitly stopped
   // (via run_capability's own timeout-then-cancel behavior) and redirected
   // to "charging_station" instead.
+  miss1.clear();
+  miss2.clear();
   print_section(
     "Phase 4: " + kRobot1 + " -> \"" + kDock + "\" (canceled after 10s) -> \"" +
     kChargingStation + "\", " + kRobot2 + " -> \"" + kDock + "\" (simultaneously)");
@@ -294,19 +334,22 @@ int main(int argc, char ** argv)
             make_navigation_feedback_printer(robot1_navigation->get().action_name));
           print_step(kRobot1 + " redirected to \"" + kChargingStation + "\".");
           status.set_status(kRobot1, "Navigating -> " + kChargingStation + "\n(redirected)");
-          run_capability<Navigation>(
-            robot1_navigation_client, robot1_navigation->get().action_name + " (charging_station)",
-            make_easynav_goal(kChargingStation), kLongTimeout,
-            make_navigation_feedback_printer(robot1_navigation->get().action_name));
+          miss1 = missed(
+            kRobot1, kChargingStation, run_capability<Navigation>(
+              robot1_navigation_client,
+              robot1_navigation->get().action_name + " (charging_station)",
+              make_easynav_goal(kChargingStation), kLongTimeout,
+              make_navigation_feedback_printer(robot1_navigation->get().action_name)));
         });
     } else {
       print_step("[" + kRobot1 + "/navigation] not active, skipping.");
     }
     if (robot2_navigation_client) {
       status.set_status(kRobot2, "Navigating -> " + kDock);
-      run_capability<Navigation>(
-        robot2_navigation_client, robot2_navigation->get().action_name, make_easynav_goal(kDock),
-        kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name));
+      miss2 = missed(
+        kRobot2, kDock, run_capability<Navigation>(
+          robot2_navigation_client, robot2_navigation->get().action_name, make_easynav_goal(kDock),
+          kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name)));
     } else {
       print_step("[" + kRobot2 + "/navigation] not active, skipping.");
     }
@@ -315,12 +358,16 @@ int main(int argc, char ** argv)
     }
   }
   print_step(
-    "Phase 4 done: " + kRobot1 + " at \"" + kChargingStation + "\", " + kRobot2 + " at \"" +
-    kDock + "\".");
+    phase_end(
+      "Phase 4",
+      kRobot1 + " at \"" + kChargingStation + "\", " + kRobot2 + " at \"" + kDock + "\".",
+      {miss1, miss2}));
   status.set_status(kRobot1, "At " + kChargingStation + "\nIdle");
   status.set_status(kRobot2, "At " + kDock + "\nIdle");
 
   // Phase 5: both robots return to their own starting pose, simultaneously.
+  miss1.clear();
+  miss2.clear();
   print_section(
     "Phase 5: " + kRobot1 + " -> \"" + kRobot1Home + "\", " + kRobot2 + " -> \"" + kRobot2Home +
     "\" (simultaneously)");
@@ -330,20 +377,22 @@ int main(int argc, char ** argv)
       status.set_status(kRobot1, "Navigating -> home");
       robot1_thread = std::thread(
         [&] {
-          run_capability<Navigation>(
-            robot1_navigation_client, robot1_navigation->get().action_name,
-            make_easynav_goal(kRobot1Home), kLongTimeout,
-            make_navigation_feedback_printer(robot1_navigation->get().action_name));
+          miss1 = missed(
+            kRobot1, kRobot1Home, run_capability<Navigation>(
+              robot1_navigation_client, robot1_navigation->get().action_name,
+              make_easynav_goal(kRobot1Home), kLongTimeout,
+              make_navigation_feedback_printer(robot1_navigation->get().action_name)));
         });
     } else {
       print_step("[" + kRobot1 + "/navigation] not active, skipping.");
     }
     if (robot2_navigation_client) {
       status.set_status(kRobot2, "Navigating -> home");
-      run_capability<Navigation>(
-        robot2_navigation_client, robot2_navigation->get().action_name,
-        make_easynav_goal(kRobot2Home),
-        kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name));
+      miss2 = missed(
+        kRobot2, kRobot2Home, run_capability<Navigation>(
+          robot2_navigation_client, robot2_navigation->get().action_name,
+          make_easynav_goal(kRobot2Home),
+          kLongTimeout, make_navigation_feedback_printer(robot2_navigation->get().action_name)));
     } else {
       print_step("[" + kRobot2 + "/navigation] not active, skipping.");
     }
@@ -361,7 +410,7 @@ int main(int argc, char ** argv)
   if (robot2_manipulation_client) {
     robot2_manipulation_client->cancel();
   }
-  print_step("Phase 5 done: both robots back at their starting pose.");
+  print_step(phase_end("Phase 5", "both robots back at their starting pose.", {miss1, miss2}));
   status.set_status(kRobot1, "Mission complete");
   status.set_status(kRobot2, "Mission complete");
 

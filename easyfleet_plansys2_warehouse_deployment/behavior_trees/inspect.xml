@@ -1,0 +1,6 @@
+<!-- (inspect ?r ?p ?l): the robot's perception capability looks for the package. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <CallPerception robot="{arg0}" object_classes="package" timeout="20.0" server_timeout="10.0"/>
+  </BehaviorTree>
+</root>

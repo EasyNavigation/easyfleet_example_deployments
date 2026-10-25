@@ -1,0 +1,29 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The mission of warehouse_controller: the robots (with their homes, where
+# they start), the docks, where the packages are, and the goals reached one
+# after another. The locations are the waypoints of config/navigation_params.yaml.
+/**:
+  ros__parameters:
+    robots: ["robot_1", "robot_2", "robot_3", "robot_4"]
+    homes: ["home_1", "home_2", "home_3", "home_4"]
+    docks: ["dock_2", "dock_3", "dock_4", "dock_5"]
+    packages: ["pkg_1:bay_2", "pkg_2:bay_3", "pkg_3:bay_1", "pkg_4:bay_4"]
+    goals:
+      - "(and (package_at pkg_1 dock_3) (package_at pkg_2 dock_4))"
+      - "(and (package_at pkg_3 dock_2) (package_at pkg_4 dock_5))"
+      - "(and (robot_at robot_1 home_1) (robot_at robot_2 home_2) (robot_at robot_3 home_3) (robot_at robot_4 home_4))"
+    discovery_timeout: 60.0
