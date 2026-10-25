@@ -1,0 +1,33 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The fleet's map and routes (Warehouse A), shared by the four robots. Only
+# what places each base_link in "map" is relayed to /tf, for the central RViz.
+# Each robot also gets the others as obstacles (/<robot>/fleet_obstacles): a
+# Kobuki's lidar barely sees another Kobuki (only its thin standoffs).
+/**:
+  ros__parameters:
+    map_type: "costmap"
+    map.package: "easyfleet_easynav_deployment"
+    map.map_path_file: "maps/warehouse_a.yaml"
+    routes.package: "easyfleet_easynav_deployment"
+    routes.map_path_file: "maps/warehouse_a_routes.yaml"
+    # Each robot keeps its TF under its namespace; only what places its
+    # base_link in "map" reaches /tf, at most 10 times per second.
+    robots.relay_tf: true
+    robots.relay_tf_frames: ["odom", "base_footprint", "base_link"]
+    robots.relay_tf_rate_hz: 10.0
+    robots.share_obstacles: true
+    robots.obstacle_radius_m: 0.25

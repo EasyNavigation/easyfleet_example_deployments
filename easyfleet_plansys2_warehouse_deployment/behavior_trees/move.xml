@@ -1,0 +1,6 @@
+<!-- (move ?r ?from ?to): the robot's navigation capability takes it to the waypoint ?to. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <CallNavigation robot="{arg0}" goal_id="{arg2}" server_timeout="10.0"/>
+  </BehaviorTree>
+</root>

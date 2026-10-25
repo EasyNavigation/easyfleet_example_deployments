@@ -1,0 +1,176 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The fleet and its mission: the four robots (robot_1 and robot_2 scouts,
+# robot_3 and robot_4 carriers), the navigation manager with the central
+# RViz, PlanSys2 (Kairos) with one behavior-tree action performer per action
+# a robot may run at once, and the mission controller. Each action's tree
+# calls the robot's capabilities (easyfleet_bt_nodes). Run
+# simulation_launch.yaml first.
+
+launch:
+  - arg: {name: "mission", default: "true", description: "Run the mission controller"}
+  - arg: {name: "central_rviz", default: "true", description: "Open the central RViz"}
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+
+  - node:
+      pkg: "easyfleet_navigation_manager"
+      exec: "navigation_manager_node"
+      output: "screen"
+      param:
+        - from: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/config/navigation_manager.params.yaml"
+
+  - node:
+      if: "$(var central_rviz)"
+      pkg: "rviz2"
+      exec: "rviz2"
+      name: "central_rviz"
+      output: "screen"
+      args: "-d $(find-pkg-share easyfleet_plansys2_warehouse_deployment)/rviz/warehouse.rviz"
+      param:
+        - name: "use_sim_time"
+          value: true
+
+  - include:
+      file: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/launch/robot_launch.yaml"
+      arg:
+        - {name: "robot", value: "robot_1"}
+        - {name: "role", value: "scout"}
+  - include:
+      file: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/launch/robot_launch.yaml"
+      arg:
+        - {name: "robot", value: "robot_2"}
+        - {name: "role", value: "scout"}
+  - include:
+      file: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/launch/robot_launch.yaml"
+      arg:
+        - {name: "robot", value: "robot_3"}
+        - {name: "role", value: "carrier"}
+  - include:
+      file: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/launch/robot_launch.yaml"
+      arg:
+        - {name: "robot", value: "robot_4"}
+        - {name: "role", value: "carrier"}
+
+  - include:
+      file: "$(find-pkg-share plansys2_bringup)/launch/plansys2_bringup_launch_monolithic.py"
+      arg:
+        - {name: "model_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/pddl/warehouse.pddl"}
+        - {name: "params_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/config/plansys2_params.yaml"}
+
+  # Action performers: as many of each action as robots may run it at once.
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "move_1"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "move"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/move.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "move_2"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "move"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/move.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "move_3"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "move"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/move.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "move_4"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "move"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/move.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "inspect_1"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "inspect"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/inspect.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "inspect_2"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "inspect"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/inspect.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "pick_1"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "pick"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/pick.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "pick_2"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "pick"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/pick.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "drop_1"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "drop"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/drop.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+  - node:
+      pkg: "plansys2_bt_actions"
+      exec: "bt_action_node"
+      name: "drop_2"
+      output: "screen"
+      param:
+        - {name: "action_name", value: "drop"}
+        - {name: "bt_xml_file", value: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/behavior_trees/drop.xml"}
+        - {name: "plugins", value: ["easyfleet_capability_bt_nodes"]}
+
+  # Once every capability has had time to come up.
+  - timer:
+      if: "$(var mission)"
+      period: 10.0
+      children:
+        - node:
+            pkg: "easyfleet_plansys2_warehouse_deployment"
+            exec: "warehouse_controller"
+            output: "screen"
+            param:
+              - from: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/config/controller.yaml"
+              - from: "$(find-pkg-share easyfleet_plansys2_warehouse_deployment)/config/navigation_params.yaml"

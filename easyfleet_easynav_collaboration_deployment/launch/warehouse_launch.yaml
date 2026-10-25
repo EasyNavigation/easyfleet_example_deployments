@@ -1,0 +1,34 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The collaboration example in large_warehouse_world's Warehouse A: robot_1 and
+# robot_2 with their EasyNav stacks on the warehouse map and aisle routes
+# (easyfleet_easynav_deployment's maps/warehouse_a*.yaml), the navigation
+# manager, the central rviz2 and, unless mission:=false, the example mission
+# on waypoints placed in the warehouse (config/warehouse/). Run
+# warehouse_simulation_launch.yaml first.
+
+launch:
+  - arg: {name: "robot_rviz", default: "false", description: "Also open each robot's own rviz2"}
+  - arg: {name: "mission", default: "true", description: "Run the example mission"}
+  - include:
+      file: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/launch/easynav_collaboration_launch.yaml"
+      arg:
+        - {name: "robot_rviz", value: "$(var robot_rviz)"}
+        - {name: "mission", value: "$(var mission)"}
+        - {name: "robot_1_easynav_params", value: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/warehouse/robot_1/easynav_system.costmap_rpp.params.yaml"}
+        - {name: "robot_2_easynav_params", value: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/warehouse/robot_2/easynav_system.costmap_rpp.params.yaml"}
+        - {name: "navigation_params", value: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/warehouse/navigation_params.yaml"}
+        - {name: "navigation_manager_params", value: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/warehouse/navigation_manager.params.yaml"}
