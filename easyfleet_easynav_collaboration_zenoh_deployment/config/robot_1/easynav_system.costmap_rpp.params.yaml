@@ -20,7 +20,7 @@
 # copied from src/easynav_indoor_testcase/robots_params/costmap.rpp.params.yaml).
 # The only difference from that single-robot file is localizer_node's
 # initial_pose below, set to robot_1's actual spawn pose in
-# easynav_playground_kobuki's multirobot_config.yaml (x=0.0, y=0.0, no
+# launch/simulation_launch.yaml (x=0.0, y=0.0, no
 # rotation) -- matching src/easynav_indoor_testcase's own multi-robot
 # reference (costmap_multirobot.params.yaml), which seeds each robot's
 # AMCL at its exact spawn pose rather than an arbitrary offset.

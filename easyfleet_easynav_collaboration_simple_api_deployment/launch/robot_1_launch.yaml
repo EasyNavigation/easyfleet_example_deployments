@@ -19,9 +19,9 @@
 # this package) plus a fake perception capability (this package's own
 # robot_node), all namespaced under /robot_1 so they never collide with
 # robot_2's identically-shaped setup. Can be run standalone, against
-# easynav_playground_kobuki's playgorund_multirobot_kobuki.launch.py
+# this package's simulation_launch.yaml
 # already running (robot_1's Kobuki is spawned there, namespaced the same
-# way -- see multirobot_config.yaml).
+# way).
 #
 # system_main's "tf_prefix" is set to "robot_1" to match: kobuki_description
 # prefixes every TF frame name with the robot's namespace unconditionally
@@ -51,6 +51,8 @@
 # Each robot gets its own window/config, so both can be watched navigating
 # at once.
 launch:
+  - arg: {name: "rviz", default: "true", description: "Open this robot's own rviz2"}
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - group:
       - push_ros_namespace:
           namespace: "robot_1"
@@ -64,6 +66,11 @@ launch:
             - name: "tf_prefix"
               value: "robot_1"
           remap:
+            # Each robot has its own TF tree, under its namespace (/robot_N/tf).
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
             # Fleet-wide map/routes from easyfleet_navigation_manager's
             # navigation_manager_node. Direction is "from what the code
             # itself names its topic, to the name we actually want" --
@@ -111,9 +118,15 @@ launch:
             - from: "$(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/config/robot_1/perception_params.yaml"
 
       - node:
+          if: "$(var rviz)"
           pkg: "rviz2"
           exec: "rviz2"
           output: "screen"
+          remap:
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
           args: "-d $(find-pkg-share easyfleet_easynav_collaboration_simple_api_deployment)/rviz/robot_1.rviz"
           param:
             - name: "use_sim_time"

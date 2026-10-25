@@ -1,0 +1,48 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Parameters for the "navigation" capability, reusing
+# easyfleet_easynav_deployment's own easynav_navigation_capability_node as-is
+# (see launch/robot_1_launch.yaml) -- see that package's own
+# navigation_params.yaml for the full explanation of why "/**" is used here
+# instead of a bare node name (this node is namespaced under "robot_1").
+#
+# Waypoints are local-ENU coordinates on src/granja_leon's map (a 400x400 m
+# square centered on the world's GPS anchor, see
+# src/granja_leon/worlds/granja_leon.world's <spherical_coordinates>), kept
+# modest and close to the robot's spawn point (0, 0) to stay well within the
+# navigable area regardless of local terrain slope.
+/**:
+  ros__parameters:
+    navigation:
+      allow_preemption: true
+      tick_rate_hz: 10.0
+      waypoint_ids: ["north_point", "east_point", "home"]
+      waypoints:
+        north_point:
+          frame_id: "map"
+          x: 0.0
+          y: 10.0
+          yaw: 1.57
+        east_point:
+          frame_id: "map"
+          x: 10.0
+          y: 0.0
+          yaw: 0.0
+        home:
+          frame_id: "map"
+          x: 0.0
+          y: 0.0
+          yaw: 0.0

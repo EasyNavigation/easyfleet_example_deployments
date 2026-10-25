@@ -85,11 +85,6 @@
           "*/robot_2/navigation/**/@adv/**",
           "*/robot_2/manipulation/**",
           "*/robot_2/manipulation/**/@adv/**",
-          // robot -> central, TRANSIENT_LOCAL (robot_state_publisher):
-          // needed for the fleet-wide RViz2 (navigation_manager.rviz) to
-          // render this robot's RobotModel display.
-          "*/robot_2/robot_description/**",
-          "*/robot_2/robot_description/**/@adv/**",
           // navigation_manager_node's inter-robot collision arbitration --
           // see robot_1/zenoh_router.json5's identical entry for the full
           // explanation (RobotNavigationWatcher watches this robot's path
@@ -114,25 +109,22 @@
         key_exprs: ["@ros2_lv/**"],
       },
       {
-        // /tf, /tf_static: interest/query propagation bidirectional (needed
-        // for routing), but see allow_tf_boundary_data_out below for why
-        // the actual data is egress-only -- full rationale in
-        // robot_1/zenoh_router.json5's identical rule (confirmed
-        // empirically that this prevents a robot from ever receiving
-        // another robot's TF back through the central island, while still
-        // letting the central island see everyone's merged).
+        // /robot_2/tf, /robot_2/tf_static: interest/query propagation
+        // bidirectional (needed for routing), data egress-only (next rule),
+        // for the central navigation_manager_node's fleet view -- full
+        // rationale in robot_1/zenoh_router.json5's identical rule.
         id: "allow_tf_boundary_meta",
         messages: ["declare_subscriber", "query", "declare_queryable"],
         flows: ["egress", "ingress"],
         permission: "allow",
-        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+        key_exprs: ["*/robot_2/tf/**", "*/robot_2/tf_static/**", "*/robot_2/tf_static/**/@adv/**"],
       },
       {
         id: "allow_tf_boundary_data_out",
         messages: ["put", "delete", "reply"],
         flows: ["egress"],
         permission: "allow",
-        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+        key_exprs: ["*/robot_2/tf/**", "*/robot_2/tf_static/**", "*/robot_2/tf_static/**/@adv/**"],
       },
     ],
     subjects: [

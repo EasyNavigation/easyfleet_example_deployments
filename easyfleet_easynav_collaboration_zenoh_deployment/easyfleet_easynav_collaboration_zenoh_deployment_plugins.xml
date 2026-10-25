@@ -7,7 +7,7 @@
       sibling easyfleet_easynav_collaboration_deployment package's own
       hardcoded factory already expects means the exact same "capabilities"
       parameter value (e.g. ["perception"]) works unchanged for either
-      package's robot_node.cpp -- the two are meant to be interchangeable
+      package's robot_node.cpp: the two are meant to be interchangeable
       at the launch level with no other change (see refactor.md).
       A package offering more than one alternative implementation of the
       same capability type would register each under

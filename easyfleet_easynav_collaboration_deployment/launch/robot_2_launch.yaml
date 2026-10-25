@@ -19,9 +19,9 @@
 # this package) plus a fake manipulation capability (this package's own
 # robot_node), all namespaced under /robot_2 so they never collide with
 # robot_1's identically-shaped setup. Can be run standalone, against
-# easynav_playground_kobuki's playgorund_multirobot_kobuki.launch.py
+# this package's simulation_launch.yaml
 # already running (robot_2's Kobuki is spawned there, namespaced the same
-# way -- see multirobot_config.yaml).
+# way).
 #
 # See robot_1_launch.yaml for why "tf_prefix" is set to match the
 # namespace, and why it -- and the namespace itself -- are hardcoded here
@@ -29,6 +29,16 @@
 # below loads its own pre-resolved rviz/robot_2.rviz config instead of a
 # remapped copy of the shared easynav_costmap.rviz.
 launch:
+  - arg: {name: "rviz", default: "true", description: "Open this robot's own rviz2"}
+  - arg:
+      name: "easynav_params"
+      default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/robot_2/easynav_system.costmap_rpp.params.yaml"
+      description: "EasyNav parameters (map, routes, initial pose)"
+  - arg:
+      name: "navigation_params"
+      default: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/navigation_params.yaml"
+      description: "Navigation capability parameters (waypoints)"
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - group:
       - push_ros_namespace:
           namespace: "robot_2"
@@ -38,10 +48,15 @@ launch:
           exec: "system_main"
           output: "screen"
           param:
-            - from: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/robot_2/easynav_system.costmap_rpp.params.yaml"
+            - from: "$(var easynav_params)"
             - name: "tf_prefix"
               value: "robot_2"
           remap:
+            # Each robot has its own TF tree, under its namespace (/robot_N/tf).
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
             # Fleet-wide map/routes from easyfleet_navigation_manager's
             # navigation_manager_node. Direction is "from what the code
             # itself names its topic, to the name we actually want" --
@@ -69,7 +84,7 @@ launch:
           name: "navigation"
           output: "screen"
           param:
-            - from: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/navigation_params.yaml"
+            - from: "$(var navigation_params)"
             - name: "behavior_tree_xml"
               value: "$(find-pkg-share easyfleet_easynav_deployment)/behavior_trees/navigate.xml"
             - name: "bt_plugins"
@@ -89,9 +104,15 @@ launch:
             - from: "$(find-pkg-share easyfleet_easynav_collaboration_deployment)/config/robot_2/manipulation_params.yaml"
 
       - node:
+          if: "$(var rviz)"
           pkg: "rviz2"
           exec: "rviz2"
           output: "screen"
+          remap:
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
           args: "-d $(find-pkg-share easyfleet_easynav_collaboration_deployment)/rviz/robot_2.rviz"
           param:
             - name: "use_sim_time"

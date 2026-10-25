@@ -9,21 +9,32 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', [f'resource/{package_name}']),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/easynav_collaboration_launch.yaml']),
+        ('share/' + package_name + '/launch', [
+            'launch/easynav_collaboration_launch.yaml',
+            'launch/robot_1_launch.yaml',
+            'launch/robot_2_launch.yaml',
+            'launch/simulation_launch.yaml',
+        ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Francisco Martín Rico',
     maintainer_email='fmrico@gmail.com',
     description=(
-        'Python-mission-controller mirror of '
-        'easyfleet_easynav_collaboration_simple_api_deployment.'
+        'Python mirror of easyfleet_easynav_collaboration_simple_api_deployment: '
+        'mission controller and fake perception/manipulation capabilities.'
     ),
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'easynav_collaboration_mission_node = '
             'easyfleet_easynav_collaboration_simple_api_deployment_py.mission:main',
+            'perception_fake_capability_node = '
+            'easyfleet_easynav_collaboration_simple_api_deployment_py'
+            '.perception_fake_capability:main',
+            'manipulation_fake_capability_node = '
+            'easyfleet_easynav_collaboration_simple_api_deployment_py'
+            '.manipulation_fake_capability:main',
         ],
     },
 )

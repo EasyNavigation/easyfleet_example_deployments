@@ -23,6 +23,7 @@
 # remap to -- each capability already carries its own explicit name (set
 # by its own constructor).
 launch:
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - group:
       - push_ros_namespace:
           namespace: "robot_2"

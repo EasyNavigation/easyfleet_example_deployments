@@ -1,0 +1,71 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# robot_1 in this scenario: a real EasyNav navigation stack (easynav_system
+# system_main + easyfleet_easynav_deployment's own
+# easynav_navigation_capability_node, reused directly -- not duplicated in
+# this package), configured for GPS localization (easynav_fusion_localizer)
+# and a NavMap (easynav_navmap_maps_manager), no distance/range sensor.
+# Namespaced under /robot_1, the robot's identity in the fleet; the Summit
+# itself (launch/simulation_launch.yaml, from easynav_playground_summit) is
+# not namespaced, so its sensor topics are absolute in the parameters file.
+#
+# No tf_prefix: the playground Summit's frames are not prefixed either.
+launch:
+  - arg: {name: "rviz", default: "true", description: "Open this robot's rviz2"}
+  # Zenoh by default; needs the router started by simulation_launch.yaml.
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+  - group:
+      - push_ros_namespace:
+          namespace: "robot_1"
+
+      - node:
+          pkg: "easynav_system"
+          exec: "system_main"
+          output: "screen"
+          param:
+            - from: "$(find-pkg-share easyfleet_easynav_farm_deployment)/config/easynav_system.params.yaml"
+          # The playground's Summit is not namespaced: its frames have no
+          # prefix and it listens on /cmd_vel.
+          remap:
+            - from: "cmd_vel"
+              to: "/cmd_vel"
+
+      - node:
+          pkg: "easyfleet_easynav_deployment"
+          exec: "easynav_navigation_capability_node"
+          name: "navigation"
+          output: "screen"
+          param:
+            - from: "$(find-pkg-share easyfleet_easynav_farm_deployment)/config/navigation_params.yaml"
+            - name: "behavior_tree_xml"
+              value: "$(find-pkg-share easyfleet_easynav_deployment)/behavior_trees/navigate.xml"
+            - name: "bt_plugins"
+              value:
+                - "$(find-pkg-prefix easyfleet_easynav_navigation)/lib/libeasynav_navigate_bt_node.so"
+                - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libstart_off_bt_node.so"
+                - "$(find-pkg-prefix easyfleet_easynav_deployment)/lib/libfinish_bt_node.so"
+            - name: "capabilities_file"
+              value: "$(find-pkg-share easyfleet_easynav_farm_deployment)/config/navigation.json"
+
+      - node:
+          if: "$(var rviz)"
+          pkg: "rviz2"
+          exec: "rviz2"
+          output: "screen"
+          args: "-d $(find-pkg-share easyfleet_easynav_farm_deployment)/rviz/robot_1.rviz"
+          param:
+            - name: "use_sim_time"
+              value: true

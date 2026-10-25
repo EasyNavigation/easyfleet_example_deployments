@@ -4,17 +4,17 @@
   <name>easyfleet_easynav_collaboration_simple_api_deployment_py</name>
   <version>0.1.0</version>
   <description>
-    The Python-mission-controller mirror of
-    easyfleet_easynav_collaboration_simple_api_deployment: the exact same
-    two-robot scenario (real EasyNav navigation on both robots, robot_1
-    also carrying a fake perception capability, robot_2 a fake
-    manipulation one, same Gazebo world/map, same launch/config/rviz
-    shape, reused directly from that sibling package -- robot_node,
-    perception/manipulation capabilities, navigation, launch files), but
-    the mission script is written in Python against
-    easyfleet_mission_manager_py's RobotHandle/SimpleController instead
-    of the sibling package's C++ one. Only the mission controller
-    differs; everything else is the same package, included directly.
+    The Python mirror of easyfleet_easynav_collaboration_simple_api_deployment:
+    the exact same two-robot scenario (real EasyNav navigation on both
+    robots, robot_1 also carrying a fake perception capability, robot_2 a
+    fake manipulation one, same Gazebo world/map, same rviz shape). Real
+    EasyNav navigation, its config, and rviz configs are reused directly
+    from that sibling package; the fake perception/manipulation
+    capabilities and the mission script are this package's own Python
+    implementations, built on easyfleet_mission_manager_py's
+    Capability/ActionServerBase (capabilities) and RobotHandle/
+    SimpleController (mission control) instead of the sibling package's
+    C++ ones.
   </description>
 
   <maintainer email="fmrico@gmail.com">Francisco Martín Rico</maintainer>
@@ -25,13 +25,26 @@
 
   <depend>rclpy</depend>
   <depend>easyfleet_mission_manager_py</depend>
+  <depend>easyfleet_interfaces</depend>
+  <depend>vision_msgs</depend>
 
   <exec_depend>easyfleet_easynav_collaboration_simple_api_deployment</exec_depend>
   <exec_depend>easyfleet_navigation_manager</exec_depend>
+  <exec_depend>easyfleet_easynav_deployment</exec_depend>
+  <exec_depend>easyfleet_easynav_navigation</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>launch_yaml</exec_depend>
   <exec_depend>rviz2</exec_depend>
+
+  <exec_depend>easynav_system</exec_depend>
+  <exec_depend>easynav_costmap_localizer</exec_depend>
+  <exec_depend>easynav_costmap_maps_manager</exec_depend>
+  <exec_depend>easynav_costmap_planner</exec_depend>
+  <exec_depend>easynav_regulated_pp_controller</exec_depend>
+  <exec_depend>easynav_routes_maps_manager</exec_depend>
+  <exec_depend>easynav_playground_kobuki_worlds</exec_depend>
+  <exec_depend>rmw_zenoh_cpp</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

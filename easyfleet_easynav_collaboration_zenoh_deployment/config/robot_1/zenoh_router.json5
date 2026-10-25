@@ -174,11 +174,6 @@
           "*/robot_1/navigation/**/@adv/**",
           "*/robot_1/perception/**",
           "*/robot_1/perception/**/@adv/**",
-          // robot -> central, TRANSIENT_LOCAL (robot_state_publisher):
-          // needed for the fleet-wide RViz2 (navigation_manager.rviz) to
-          // render this robot's RobotModel display.
-          "*/robot_1/robot_description/**",
-          "*/robot_1/robot_description/**/@adv/**",
           // navigation_manager_node's inter-robot collision arbitration
           // (RobotNavigationWatcher, easyfleet_navigation_manager): watches
           // this robot's planned path (robot -> central,
@@ -233,33 +228,22 @@
         key_exprs: ["@ros2_lv/**"],
       },
       {
-        // /tf and /tf_static are deliberately NOT in allow_boundary_data:
-        // they're absolute, unnamespaced topics (see zenoh.md pregunta 4),
-        // so if crossed bidirectionally like everything else here, whatever
-        // central forwards back in -- which, once the fleet-wide RViz2 also
-        // wants robot_2's TF merged onto the very same "/tf" key, would
-        // include robot_2's frames too -- would land right back in this
-        // island, defeating the entire point of keeping each robot's TF
-        // tree private. Interest/query propagation (this rule) still needs
-        // to flow both ways for routing to work at all (this is how a
-        // *subscriber* on the other end tells this router "please forward
-        // me matching data"), but the actual DATA-carrying message types
-        // (next rule) are deliberately egress-only: robot_1's own /tf can
-        // leave towards the central island's merged view, but nothing
-        // coming back over this same link can ever re-enter robot_1's own
-        // island. Confirmed empirically: a subscriber connected to this
-        // island only ever received robot_1's own /tf, never a second
-        // publisher's /tf injected directly on the central side (simulating
-        // robot_2's), while a subscriber on the central side correctly saw
-        // both. See zenoh.md (2026-08-29).
+        // This robot's TF (/robot_1/tf, /robot_1/tf_static, robot_1/ frames)
+        // stays out of allow_boundary_data: only what crosses is what the
+        // central navigation_manager_node subscribes to for its fleet view
+        // (robots.relay_tf, which keeps just the frames that place this
+        // robot's base_link in "map"). Interest/query propagation (this rule)
+        // flows both ways for routing to work; the data itself (next rule)
+        // is egress-only, so nothing from the central side ever enters this
+        // island's TF tree. See zenoh.md.
         id: "allow_tf_boundary_meta",
         messages: ["declare_subscriber", "query", "declare_queryable"],
         flows: ["egress", "ingress"],
         permission: "allow",
-        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+        key_exprs: ["*/robot_1/tf/**", "*/robot_1/tf_static/**", "*/robot_1/tf_static/**/@adv/**"],
       },
       {
-        // The actual DATA for /tf, /tf_static -- egress only, see
+        // The actual DATA for /robot_1/tf, /robot_1/tf_static -- egress only, see
         // allow_tf_boundary_meta above for why. /tf_static is
         // TRANSIENT_LOCAL (standard ROS 2 convention), hence its "@adv"
         // twin, same reasoning as every other latched topic in this file;
@@ -271,7 +255,7 @@
         messages: ["put", "delete", "reply"],
         flows: ["egress"],
         permission: "allow",
-        key_exprs: ["*/tf/**", "*/tf_static/**", "*/tf_static/**/@adv/**"],
+        key_exprs: ["*/robot_1/tf/**", "*/robot_1/tf_static/**", "*/robot_1/tf_static/**/@adv/**"],
       },
     ],
     subjects: [

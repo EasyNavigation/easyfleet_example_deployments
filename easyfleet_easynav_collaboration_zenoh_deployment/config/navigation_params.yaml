@@ -66,7 +66,7 @@
           y: -0.15
           yaw: -3.14
         # Each robot's own Gazebo spawn pose (see
-        # easynav_playground_kobuki/config/multirobot_config.yaml), used by
+        # launch/simulation_launch.yaml), used by
         # main_easynav_collaboration.cpp to send each robot back to where it
         # started at the end of the mission.
         robot_1_home:

@@ -34,3 +34,8 @@
     map.map_path_file: "maps/home2.yaml"
     routes.package: "easyfleet_easynav_deployment"
     routes.map_path_file: "maps/routes_1.yaml"
+    # Each robot keeps its TF under its namespace; only what places its
+    # base_link in "map" reaches /tf, at most 10 times per second.
+    robots.relay_tf: true
+    robots.relay_tf_frames: ["odom", "base_footprint", "base_link"]
+    robots.relay_tf_rate_hz: 10.0

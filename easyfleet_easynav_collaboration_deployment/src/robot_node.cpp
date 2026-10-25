@@ -94,6 +94,9 @@ int main(int argc, char ** argv)
     "capabilities", std::vector<std::string>());
   const auto config_subdir = config_node->declare_parameter(
     "config_subdir", std::string());
+  // Package whose share/config/<config_subdir> holds the capability JSON files.
+  const auto config_package = config_node->declare_parameter(
+    "config_package", std::string("easyfleet_easynav_collaboration_deployment"));
 
   if (capability_names.empty()) {
     RCLCPP_FATAL(
@@ -104,7 +107,7 @@ int main(int argc, char ** argv)
   }
 
   const std::filesystem::path share_dir = ament_index_cpp::get_package_share_path(
-    "easyfleet_easynav_collaboration_deployment");
+    config_package);
 
   std::vector<LifecycleNodePtr> nodes;
   for (const auto & name : capability_names) {

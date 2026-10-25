@@ -62,7 +62,7 @@ std::string run_and_describe(
   std::function<void(const typename ActionT::Feedback &)> on_feedback)
 {
   auto response = run_capability<ActionT>(client, label, goal, kRunTimeout, on_feedback);
-  return outcome_to_string(static_cast<uint8_t>(response.outcome));
+  return outcome_to_string(response.outcome);
 }
 
 }  // namespace

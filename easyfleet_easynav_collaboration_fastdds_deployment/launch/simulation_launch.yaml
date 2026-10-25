@@ -1,0 +1,52 @@
+# Copyright 2026 Intelligent Robotics Lab
+#
+# This file is part of the project EasyFleet
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Gazebo (small house world, from easynav_playground_kobuki_worlds), the
+# /clock bridge and both Kobukis -- robot_1 at (0, 0), robot_2 at (2, 1),
+# matching config/robot_N -- each in its own ROS_DOMAIN_ID (see fastdds.md):
+# the world and its /clock bridge in the central domain 0, each Kobuki's nodes
+# in its robot's domain (1, 2). Each part is a group, so the domain set for
+# one never leaks into the next. This example is about Fast DDS + DDS Router,
+# so it pins rmw_fastrtps_cpp. system_main, the capabilities, the DDS Routers
+# and rviz2 come from robot_N_launch.yaml / easynav_collaboration_launch.yaml.
+
+launch:
+  - arg: {name: "gui", default: "true", description: "Set to false to run Gazebo headless"}
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_fastrtps_cpp"}
+  - group:
+      - set_env: {name: "ROS_DOMAIN_ID", value: "0"}
+      - include:
+          file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/world.launch.yaml"
+          arg:
+            - {name: "gui", value: "$(var gui)"}
+  - timer:
+      period: 2.0
+      children:
+        - group:
+            - set_env: {name: "ROS_DOMAIN_ID", value: "1"}
+            - include:
+                file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+                arg:
+                  - {name: "name", value: "kobuki_1"}
+                  - {name: "namespace", value: "robot_1"}
+        - group:
+            - set_env: {name: "ROS_DOMAIN_ID", value: "2"}
+            - include:
+                file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+                arg:
+                  - {name: "name", value: "kobuki_2"}
+                  - {name: "namespace", value: "robot_2"}
+                  - {name: "x", value: "2.0"}
+                  - {name: "y", value: "1.0"}

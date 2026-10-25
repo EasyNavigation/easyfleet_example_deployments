@@ -36,10 +36,9 @@
 # including map_frame -- see easynav_common/RTTFBuffer.hpp) is set below to
 # the same robot_namespace value so its TF lookups match; empty by default,
 # a no-op, so the unnamespaced case is unaffected. Set
-# robot_namespace:="robot_1" (matching easynav_playground_kobuki's
-# playground_monorobot_kobuki.launch.py, whose monorobot_config.yaml spawns
-# the Kobuki under that same namespace) to exercise EasyFleet's
-# namespace-based robot-id handling here too.
+# robot_namespace:="robot_1" (and spawn the Kobuki with
+# easynav_playground_kobuki_worlds' kobuki.launch.yaml namespace:=robot_1) to
+# exercise EasyFleet's namespace-based robot-id handling here too.
 #
 # rviz2 is inside the same namespace group, with an explicit "remap" entry
 # per absolute ("/foo") topic reference baked into
@@ -56,11 +55,9 @@
 # which is exactly the relative topic easynav_system's GoalManager
 # subscribes to (GoalManager.cpp) -- so once both are in the same
 # namespace, the RViz arrow drives EasyNav directly, no GoalManagerClient
-# needed. /tf and /tf_static are deliberately *not* remapped: this scenario
-# uses tf_prefix (a shared /tf topic, namespace-prefixed frame *names*),
-# not kobuki_description's separate do_tf_remapping (per-robot /tf
-# *topics*) -- see the tf_prefix comment above -- so rviz2 needs to see the
-# same shared /tf topic system_main/Kobuki do. Fixed Frame is overridden
+# needed. /tf and /tf_static are remapped to the namespace too, as
+# easynav_playground_kobuki_worlds' kobuki.launch.yaml does for a namespaced
+# Kobuki (/<ns>/tf); unnamespaced, that is plain /tf. Fixed Frame is overridden
 # via rviz2's own "-f" CLI flag rather than editing the .rviz file, using
 # "$(path-join ...)" so it comes out as "map" when unnamespaced and
 # "<robot_namespace>/map" when namespaced (path-join drops an empty first
@@ -68,10 +65,20 @@
 # leading-slash "/map" -- not a valid unprefixed frame id -- in the
 # unnamespaced case).
 launch:
+  # Zenoh by default; needs the router started by simulation_launch.yaml.
+  - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
   - arg:
       name: "robot_namespace"
       default: ""
       description: "Namespace system_main + the navigation capability are pushed under. Empty (default) for a single unnamespaced real robot/Gazebo instance."
+  - arg:
+      name: "easynav_params"
+      default: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/easynav_system.costmap_rpp.params.yaml"
+      description: "EasyNav (system_main) parameters file"
+  - arg:
+      name: "navigation_params"
+      default: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/navigation_params.yaml"
+      description: "Navigation capability parameters file (waypoints)"
 
   - group:
       - push_ros_namespace:
@@ -82,10 +89,15 @@ launch:
           exec: "system_main"
           output: "screen"
           param:
-            - from: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/easynav_system.costmap_rpp.params.yaml"
+            - from: "$(var easynav_params)"
             - name: "tf_prefix"
               value: "$(var robot_namespace)"
           remap:
+            # Each robot has its own TF tree, under its namespace (/robot_N/tf).
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
             # Fleet-wide map/routes, published once by
             # easyfleet_navigation_manager's navigation_manager_node.
             # Remap direction is "from what the code itself names its
@@ -110,7 +122,7 @@ launch:
           name: "navigation"
           output: "screen"
           param:
-            - from: "$(find-pkg-share easyfleet_easynav_deployment)/config/easynav_robot/navigation_params.yaml"
+            - from: "$(var navigation_params)"
             - name: "behavior_tree_xml"
               value: "$(find-pkg-share easyfleet_easynav_deployment)/behavior_trees/navigate.xml"
             - name: "bt_plugins"
@@ -130,6 +142,11 @@ launch:
             - name: "use_sim_time"
               value: true
           remap:
+            # Each robot has its own TF tree, under its namespace (/robot_N/tf).
+            - from: "/tf"
+              to: "tf"
+            - from: "/tf_static"
+              to: "tf_static"
             - from: "/maps_manager_node/costmap/dynamic_map"
               to: "maps_manager_node/costmap/dynamic_map"
             - from: "/maps_manager_node/costmap/dynamic_map_updates"

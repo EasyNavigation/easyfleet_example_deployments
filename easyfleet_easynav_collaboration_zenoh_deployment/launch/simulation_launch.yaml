@@ -13,142 +13,66 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Zenoh-aware equivalent of easynav_playground_kobuki's own
-# playgorund_multirobot_kobuki.launch.py, hardcoded for this deployment's
-# two robots (mirrors that package's config/multirobot_config.yaml: kobuki_1
-# -> robot_1, lidar only; kobuki_2 -> robot_2, lidar only, offset x=2.0
-# y=1.0) instead of reading it generically, matching this package's existing
-# robot_N_launch.yaml convention of being robot-specific rather than
-# parameterized. Launches Gazebo (server + client), the shared /clock
-# bridge, and both robots' Kobuki spawns (robot_state_publisher,
-# joint_state_publisher, the per-robot Gazebo<->ROS bridge) -- but NOT
-# system_main/the capability nodes/rviz2, which come from
-# robot_1_launch.yaml/robot_2_launch.yaml (or easynav_collaboration_launch.yaml)
-# as before. Run this file, then that one, in either order (see below).
-#
-# Zenoh wiring: every node here needs to land in the *same* Zenoh island as
-# the rest of that robot's stack (see zenoh.md), not on the default rmw --
-# - The Kobuki spawn nodes for robot_1/robot_2 are plain rclcpp nodes with
-#   no zenoh-specific launch arguments of their own (kobuki_description's
-#   spawn.launch.py/kobuki_description.launch.py are generic, unaware of
-#   this deployment's Zenoh setup), so RMW_IMPLEMENTATION/
-#   ZENOH_SESSION_CONFIG_URI are injected via `set_env` immediately before
-#   each robot's `include`, rather than per-node `env:` (which isn't
-#   available to us here, since we don't individually author those nodes).
-#   `set_env` mutates the whole launch context's environment from that point
-#   on, so it must be re-set to robot_2's session file before robot_2's
-#   include, or robot_2's nodes would inherit robot_1's session by mistake.
-# - The /clock bridge is the one node here that must NOT go into either
-#   robot's island: it's the single shared source of sim time for the whole
-#   fleet, so it connects to the *central* router instead, and each robot
-#   router's ACL explicitly whitelists "*/clock/**" inbound (see
-#   config/robot_N/zenoh_router.json5) so it still reaches system_main in
-#   every island.
-# - This file also starts all three routers itself (central + both robots),
-#   so it does not depend on run order relative to
-#   easynav_collaboration_launch.yaml/robot_N_launch.yaml, which start the
-#   very same routers: whichever of the two runs second just gets a
-#   harmless "address already in use" from its own duplicate router
-#   attempt (confirmed empirically -- see zenoh.md) while the one already
-#   running keeps serving; every other node here only ever *connects* to a
-#   router (with zenoh's own connect-retry), so it doesn't matter which
-#   file's router instance actually "won".
+# Gazebo (small house world, from easynav_playground_kobuki_worlds), the
+# /clock bridge and both Kobukis -- robot_1 at (0, 0), robot_2 at (2, 1),
+# matching config/robot_N -- each in its own Zenoh island (see zenoh.md):
+# the world and its /clock bridge use the central session, each Kobuki's
+# nodes use its robot's session. Each part is a group, so the RMW/session
+# environment set for one never leaks into the next. Also starts the three
+# Zenoh routers (central, robot_1, robot_2). system_main, the capabilities and
+# rviz2 come from robot_N_launch.yaml / easynav_collaboration_launch.yaml.
+
 launch:
+  - arg: {name: "gui", default: "true", description: "Set to false to run Gazebo headless"}
   - executable:
       cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
       output: "screen"
       env:
         - name: "ZENOH_ROUTER_CONFIG_URI"
           value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_router_central.json5"
-
   - executable:
       cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
       output: "screen"
       env:
         - name: "ZENOH_ROUTER_CONFIG_URI"
           value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_1/zenoh_router.json5"
-
   - executable:
       cmd: "ros2 run rmw_zenoh_cpp rmw_zenohd"
       output: "screen"
       env:
         - name: "ZENOH_ROUTER_CONFIG_URI"
           value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_router.json5"
-
-  # Gazebo world (server + GUI client), same world/args as
-  # easynav_playground_kobuki's playgorund_multirobot_kobuki.launch.py.
-  # gz-sim itself doesn't speak ROS/rmw, so no Zenoh env needed here.
-  - include:
-      file: "$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py"
-      arg:
-        - name: "gz_args"
-          value: "-r -s $(find-pkg-share aws_robomaker_small_house_world)/worlds/small_house.world"
-
-  - include:
-      file: "$(find-pkg-share ros_gz_sim)/launch/gz_sim.launch.py"
-      arg:
-        - name: "gz_args"
-          value: " -g "
-
   - timer:
       period: 2.0
       children:
-        # Shared /clock: central island, so it's visible fleet-wide without
-        # namespacing; whitelisted into each robot island explicitly (see
-        # config/robot_N/zenoh_router.json5).
-        - node:
-            pkg: "ros_gz_bridge"
-            exec: "parameter_bridge"
-            name: "bridge_ros_gz"
-            output: "screen"
-            env:
-              - name: "RMW_IMPLEMENTATION"
-                value: "rmw_zenoh_cpp"
-              - name: "ZENOH_SESSION_CONFIG_URI"
+        - group:
+            - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+            - set_env:
+                name: "ZENOH_SESSION_CONFIG_URI"
                 value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/zenoh_session_central.json5"
-            param:
-              - name: "config_file"
-                value: "$(find-pkg-share easynav_playground_kobuki)/config/bridge/clock_bridge.yaml"
-              - name: "use_sim_time"
-                value: true
-
-        - set_env:
-            name: "RMW_IMPLEMENTATION"
-            value: "rmw_zenoh_cpp"
-        - set_env:
-            name: "ZENOH_SESSION_CONFIG_URI"
-            value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_1/zenoh_session.json5"
-        - include:
-            file: "$(find-pkg-share kobuki_description)/launch/spawn.launch.py"
-            arg:
-              - name: "name"
-                value: "kobuki_1"
-              - name: "namespace"
-                value: "robot_1"
-              - name: "camera"
-                value: "false"
-              - name: "lidar"
-                value: "true"
-              - name: "use_sim_time"
-                value: "true"
-
-        - set_env:
-            name: "ZENOH_SESSION_CONFIG_URI"
-            value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
-        - include:
-            file: "$(find-pkg-share kobuki_description)/launch/spawn.launch.py"
-            arg:
-              - name: "name"
-                value: "kobuki_2"
-              - name: "namespace"
-                value: "robot_2"
-              - name: "camera"
-                value: "false"
-              - name: "lidar"
-                value: "true"
-              - name: "x"
-                value: "2.0"
-              - name: "y"
-                value: "1.0"
-              - name: "use_sim_time"
-                value: "true"
+            - include:
+                file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/world.launch.yaml"
+                arg:
+                  - {name: "gui", value: "$(var gui)"}
+        - group:
+            - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+            - set_env:
+                name: "ZENOH_SESSION_CONFIG_URI"
+                value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_1/zenoh_session.json5"
+            - include:
+                file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+                arg:
+                  - {name: "name", value: "kobuki_1"}
+                  - {name: "namespace", value: "robot_1"}
+        - group:
+            - set_env: {name: "RMW_IMPLEMENTATION", value: "rmw_zenoh_cpp"}
+            - set_env:
+                name: "ZENOH_SESSION_CONFIG_URI"
+                value: "$(find-pkg-share easyfleet_easynav_collaboration_zenoh_deployment)/config/robot_2/zenoh_session.json5"
+            - include:
+                file: "$(find-pkg-share easynav_playground_kobuki_worlds)/launch/kobuki.launch.yaml"
+                arg:
+                  - {name: "name", value: "kobuki_2"}
+                  - {name: "namespace", value: "robot_2"}
+                  - {name: "x", value: "2.0"}
+                  - {name: "y", value: "1.0"}
